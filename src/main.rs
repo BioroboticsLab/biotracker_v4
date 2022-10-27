@@ -1,68 +1,68 @@
-mod gui;
-mod window;
+use util::ScopedTimer;
 
-use winit::event::Event::*;
-use winit::event_loop::ControlFlow;
+mod ui;
+mod util;
+mod video;
+
+struct BioTracker {
+    video_sampler: video::Sampler,
+    _timer: util::ScopedTimer,
+    video_plane: ui::TextureImage,
+}
+
+impl BioTracker {
+    fn new(cc: &eframe::CreationContext) -> Option<Self> {
+        let video_sampler = video::Sampler::new().expect("Failed to create video sampler");
+        video_sampler.play().unwrap();
+        let wgpu_render_state = cc.wgpu_render_state.as_ref()?;
+        let video_plane = ui::TextureImage::new(&wgpu_render_state);
+
+        Some(Self {
+            video_sampler,
+            _timer: ScopedTimer::new("update_first"),
+            video_plane,
+        })
+    }
+}
+
+impl eframe::App for BioTracker {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.video_sampler.poll_event();
+        //self._timer = util::ScopedTimer::new("update");
+        if let Ok(sample) = self.video_sampler.sample_rx.try_recv() {
+            if let Some(data) = sample.data() {
+                let render_state = _frame.wgpu_render_state().unwrap();
+                self.video_plane.update(&render_state, data.as_slice());
+            }
+        }
+
+        {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                egui::ScrollArea::both().show(ui, |ui| {
+                    self.video_plane.show(ui);
+                })
+            });
+        }
+        ctx.request_repaint();
+    }
+
+    fn on_exit(&mut self) {
+        self.video_sampler.stop().unwrap();
+    }
+}
 
 fn main() {
-    let event_loop =
-        winit::event_loop::EventLoopBuilder::<window::RedrawEvent>::with_user_event().build();
-    let mut window = window::Window::new(&event_loop);
-    let mut egui = gui::EguiContext::new(&window);
-    let mut demo_app = egui_demo_lib::DemoWindows::default();
-    event_loop.run(move |event, _, control_flow| {
-        // Pass the winit events to the platform integration.
-        egui.platform.handle_event(&event);
+    let options = eframe::NativeOptions {
+        drag_and_drop_support: true,
 
-        match event {
-            RedrawRequested(..) => {
-                let output_frame = match window.surface.get_current_texture() {
-                    Ok(frame) => frame,
-                    Err(wgpu::SurfaceError::Outdated) => {
-                        // This error occurs when the app is minimized on Windows.
-                        // Silently return here to prevent spamming the console with:
-                        // "The underlying surface has changed, and therefore the swap chain must be updated"
-                        return;
-                    }
-                    Err(e) => {
-                        eprintln!("Dropped frame with error: {}", e);
-                        return;
-                    }
-                };
-                let output_view = output_frame
-                    .texture
-                    .create_view(&wgpu::TextureViewDescriptor::default());
-                let mut encoder =
-                    window
-                        .device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("encoder"),
-                        });
+        initial_window_size: Some([1280.0, 1024.0].into()),
+        renderer: eframe::Renderer::Wgpu,
+        ..Default::default()
+    };
 
-                let ui = egui.begin_frame();
-                demo_app.ui(&ui);
-                egui.render(&window, &mut encoder, &output_view);
-
-                // Submit the commands.
-                window.queue.submit(std::iter::once(encoder.finish()));
-
-                // Redraw egui
-                output_frame.present();
-                egui.end_frame();
-            }
-            MainEventsCleared | UserEvent(window::RedrawEvent::RequestRedraw) => {
-                window.window.request_redraw();
-            }
-            WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::Resized(size) => {
-                    window.resize(size);
-                }
-                winit::event::WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
-                }
-                _ => {}
-            },
-            _ => (),
-        }
-    });
+    eframe::run_native(
+        "BioTracker",
+        options,
+        Box::new(|cc| Box::new(BioTracker::new(cc).unwrap())),
+    );
 }

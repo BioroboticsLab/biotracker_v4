@@ -5,11 +5,18 @@ authors = ["Max Breitenfeldt <git@mxbr.me>"]
 edition = "2021"
 
 [dependencies]
-egui_wgpu_backend = "0.19"
-egui = "0.19"
-epi = "0.17"
-egui_winit_platform = "0.16"
-wgpu = "0.13"
-winit = { version="0.27.3", features = ["x11"]}
-egui_demo_lib = "0.19"
-futures = { version="0.3.24", features = ["executor"]}
+egui = { git = "https://github.com/emilk/egui" }
+egui_extras = { git = "https://github.com/emilk/egui" }
+egui-wgpu = { git = "https://github.com/emilk/egui" }
+eframe = { git = "https://github.com/emilk/egui", features=["wgpu"], default-features=false }
+wgpu = "0.14"
+futures = { version="0.3", features = ["executor"]}
+
+glib = "0.15"
+gst = { package = "gstreamer", version = "0.18" }
+gst-app = { package = "gstreamer-app", version = "0.18" }
+gst-video = { package = "gstreamer-video", version = "0.18" }
+derive_more = "0.99.17"
+anyhow = "1.0.66"
+
+bytemuck = "1.12"
