@@ -8,7 +8,7 @@ struct UiState {
 }
 
 pub struct BioTracker {
-    video_sampler: core::Sampler,
+    video_sampler: Option<core::Sampler>,
     play_state: core::VideoEvent,
     video_plane: Option<ui::TextureImage>,
     seekable: Option<core::VideoSeekable>,
@@ -20,14 +20,13 @@ impl BioTracker {
     pub fn new(cc: &eframe::CreationContext) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
         cc.egui_ctx.set_pixels_per_point(1.5);
-        let video_sampler =
-            core::Sampler::new("/home/max/Downloads/CameraCapture2022-09-29T15_27_47_1177687.avi")
-                .expect("Failed to create video sampler");
-        video_sampler.play().unwrap();
+        if let Some(render_state) = &cc.wgpu_render_state {
+            render_state.device.limits().max_texture_dimension_2d = 8192;
+        }
 
         Some(Self {
-            video_sampler,
-            play_state: core::VideoEvent::Pause,
+            video_sampler: None,
+            play_state: core::VideoEvent::Play,
             video_plane: None,
             seekable: None,
             pts: core::Timestamp(0),
@@ -39,6 +38,23 @@ impl BioTracker {
             },
         })
     }
+
+    pub fn filemenu(&mut self) {
+        if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
+            if let Some(path_str) = pathbuf.to_str() {
+                let sampler = core::Sampler::new(path_str).expect("Failed to create video sampler");
+                sampler.play().unwrap();
+                if let Some(old_sampler) = self.video_sampler.take() {
+                    old_sampler.stop().unwrap();
+                }
+                self.seekable = None;
+                self.video_sampler = Some(sampler);
+                self.video_plane = None;
+            } else {
+                eprintln!("Failed to get unicode string from pathbuf");
+            }
+        }
+    }
 }
 
 impl eframe::App for BioTracker {
@@ -48,61 +64,60 @@ impl eframe::App for BioTracker {
             self.ui_state.video_scale *= zoom_delta;
         }
         let render_state = frame.wgpu_render_state().unwrap();
-        if let Some(sampler_event) = self.video_sampler.poll_event() {
-            match sampler_event {
-                core::SamplerEvent::Seekable(seekable) => {
-                    self.seekable = Some(seekable);
-                }
-                core::SamplerEvent::Event(event) => {
-                    self.play_state = event;
-                }
-            }
-        }
-
-        if let Ok(sample) = self.video_sampler.sample_rx.try_recv() {
-            if let Some(caps) = sample.sample.caps() {
-                let gst_info = gst_video::VideoInfo::from_caps(&caps).unwrap();
-                let video_texture_size = wgpu::Extent3d {
-                    width: gst_info.width(),
-                    height: gst_info.height(),
-                    depth_or_array_layers: 1,
-                };
-                match &self.video_plane {
-                    Some(video_plane) => {
-                        if video_plane.size != video_texture_size {
-                            self.video_plane =
-                                Some(ui::TextureImage::new(&render_state, video_texture_size))
-                        }
+        if let Some(sampler) = &mut self.video_sampler {
+            if let Some(sampler_event) = sampler.poll_event() {
+                match sampler_event {
+                    core::SamplerEvent::Seekable(seekable) => {
+                        self.seekable = Some(seekable);
                     }
-                    None => {
-                        self.video_plane =
-                            Some(ui::TextureImage::new(&render_state, video_texture_size))
+                    core::SamplerEvent::Event(event) => {
+                        self.play_state = event;
                     }
                 }
             }
+            if let Ok(sample) = sampler.sample_rx.try_recv() {
+                if let Some(caps) = sample.sample.caps() {
+                    let gst_info = gst_video::VideoInfo::from_caps(&caps).unwrap();
+                    if self.video_plane.is_none() {
+                        self.video_plane = Some(ui::TextureImage::new(
+                            &render_state,
+                            wgpu::Extent3d {
+                                width: gst_info.width(),
+                                height: gst_info.height(),
+                                depth_or_array_layers: 1,
+                            },
+                        ));
+                    }
+                }
 
-            if let Some(pts) = sample.pts() {
-                self.pts = core::Timestamp(pts.nseconds());
-            }
+                if let Some(pts) = sample.pts() {
+                    self.pts = core::Timestamp(pts.nseconds());
+                }
 
-            if let Some(data) = sample.data() {
-                if let Some(video_plane) = &self.video_plane {
-                    video_plane.update(&render_state, data.as_slice());
+                if let Some(data) = sample.data() {
+                    if let Some(video_plane) = &self.video_plane {
+                        video_plane.update(&render_state, data.as_slice());
+                    }
                 }
             }
         }
 
         {
-            egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+            egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
                 egui::menu::bar(ui, |ui| {
                     ui.menu_button("File", |ui| {
+                        if ui.button("Open Media").clicked() {
+                            self.filemenu();
+                            ui.close_menu();
+                        }
                         if ui.button("Quit").clicked() {
                             frame.close();
                         }
                     });
                     ui.menu_button("View", |ui| {
                         if ui.button("Settings").clicked() {
-                            self.ui_state.settings_open = !self.ui_state.settings_open;
+                            self.ui_state.settings_open = true;
+                            ui.close_menu();
                         }
                     });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -113,31 +128,40 @@ impl eframe::App for BioTracker {
 
             egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if let Some(seekable) = &self.seekable {
-                        if self.play_state == core::VideoEvent::Play {
-                            if ui.add(egui::Button::new("⏸")).clicked() {
-                                self.video_sampler.pause().unwrap();
+                    if let Some(sampler) = &self.video_sampler {
+                        if let Some(seekable) = &self.seekable {
+                            if self.play_state == core::VideoEvent::Play {
+                                if ui.add(egui::Button::new("⏸")).clicked() {
+                                    sampler.pause().unwrap();
+                                }
+                            } else {
+                                if ui.add(egui::Button::new("⏵")).clicked() {
+                                    sampler.play().unwrap();
+                                }
                             }
-                        } else {
-                            if ui.add(egui::Button::new("⏵")).clicked() {
-                                self.video_sampler.play().unwrap();
+
+                            let available_size = ui.available_size_before_wrap();
+                            let label_size = ui.available_size() / 8.0;
+                            let slider_size = available_size - (label_size);
+
+                            ui.label(&self.pts.to_string());
+                            ui.spacing_mut().slider_width = slider_size.x;
+                            let response = ui.add(
+                                egui::Slider::new(&mut self.pts.0, 0..=seekable.end.0)
+                                    .show_value(false),
+                            );
+                            if response.drag_released()
+                                || response.lost_focus()
+                                || response.changed()
+                            {
+                                sampler.seek(&self.pts);
                             }
+                            ui.label(&seekable.end.to_string());
                         }
-
-                        let available_size = ui.available_size_before_wrap();
-                        let label_size = ui.available_size() / 8.0;
-                        let slider_size = available_size - (label_size);
-
-                        ui.label(&self.pts.to_string());
-                        ui.spacing_mut().slider_width = slider_size.x;
-                        let response = ui.add(
-                            egui::Slider::new(&mut self.pts.0, 0..=seekable.end.0)
-                                .show_value(false),
-                        );
-                        if response.drag_released() || response.lost_focus() || response.changed() {
-                            self.video_sampler.seek(&self.pts);
+                    } else {
+                        if ui.add(egui::Button::new("⏵")).clicked() {
+                            self.filemenu();
                         }
-                        ui.label(&seekable.end.to_string());
                     }
                 });
             });
@@ -155,6 +179,7 @@ impl eframe::App for BioTracker {
                 });
                 egui::Window::new("Settings")
                     .open(&mut self.ui_state.settings_open)
+                    .resizable(false)
                     .show(ctx, |ui| {
                         ui.checkbox(&mut self.ui_state.dark_mode, "Dark Mode");
                         match self.ui_state.dark_mode {
@@ -173,6 +198,8 @@ impl eframe::App for BioTracker {
     }
 
     fn on_exit(&mut self) {
-        self.video_sampler.stop().unwrap();
+        if let Some(sampler) = &self.video_sampler {
+            sampler.stop().unwrap();
+        }
     }
 }

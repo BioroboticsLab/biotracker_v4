@@ -9,6 +9,7 @@ impl TextureImage {
     pub fn new(render_state: &egui_wgpu::RenderState, size: wgpu::Extent3d) -> Self {
         let device = &render_state.device;
         let mut renderer = render_state.renderer.write();
+        eprintln!("{:?}", size);
         let handle = device.create_texture(&wgpu::TextureDescriptor {
             size,
             mip_level_count: 1,
@@ -58,7 +59,6 @@ impl TextureImage {
     }
 
     pub fn show(&self, ui: &mut egui::Ui, scale: f32) {
-        let size = ui.available_size();
         let aspect_ratio = self.size.height as f32 / self.size.width as f32;
         let width = ui.available_width() * scale;
         let height = width * aspect_ratio;
