@@ -4,6 +4,7 @@ pub struct ScopedTimer {
 }
 
 impl ScopedTimer {
+    #[allow(dead_code)]
     pub fn new(name: &str) -> Self {
         Self {
             name: name.to_owned(),
