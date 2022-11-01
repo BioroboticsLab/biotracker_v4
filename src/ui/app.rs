@@ -4,6 +4,7 @@ struct UiState {
     settings_open: bool,
     dark_mode: bool,
     scaling: f32,
+    video_scale: f32,
 }
 
 pub struct BioTracker {
@@ -34,6 +35,7 @@ impl BioTracker {
                 dark_mode: false,
                 scaling: 1.5,
                 settings_open: false,
+                video_scale: 1.0,
             },
         })
     }
@@ -41,6 +43,10 @@ impl BioTracker {
 
 impl eframe::App for BioTracker {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let zoom_delta = ctx.input().zoom_delta();
+        if zoom_delta != 1.0 {
+            self.ui_state.video_scale *= zoom_delta;
+        }
         let render_state = frame.wgpu_render_state().unwrap();
         if let Some(sampler_event) = self.video_sampler.poll_event() {
             match sampler_event {
@@ -138,9 +144,14 @@ impl eframe::App for BioTracker {
 
             egui::CentralPanel::default().show(ctx, |ui| {
                 egui::ScrollArea::both().show(ui, |ui| {
-                    if let Some(video_plane) = &self.video_plane {
-                        video_plane.show(ui);
-                    }
+                    ui.with_layout(
+                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
+                        |ui| {
+                            if let Some(video_plane) = &self.video_plane {
+                                video_plane.show(ui, self.ui_state.video_scale);
+                            }
+                        },
+                    );
                 });
                 egui::Window::new("Settings")
                     .open(&mut self.ui_state.settings_open)
