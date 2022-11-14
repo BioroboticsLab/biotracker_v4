@@ -7,10 +7,8 @@ edition = "2021"
 [dependencies]
 # egui
 egui = { git = "https://github.com/emilk/egui" }
-egui_extras = { git = "https://github.com/emilk/egui" }
 egui-wgpu = { git = "https://github.com/emilk/egui" }
 eframe = { git = "https://github.com/emilk/egui", features=["wgpu"], default-features=false }
-wgpu = "0.14"
 
 # gstreamer
 glib = "0.15"
@@ -19,8 +17,8 @@ gst-app = { package = "gstreamer-app", version = "0.18" }
 gst-video = { package = "gstreamer-video", version = "0.18" }
 
 # other
-anyhow = "1.0.66"
+anyhow = "1.0"
 bytemuck = "1.12"
-derive_more = "0.99.17"
-rfd = "0.10.0"
-pollster = "0.2.5"
+derive_more = "0.99"
+rfd = "0.10"
+shared_memory = "0.12"

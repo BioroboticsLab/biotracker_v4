@@ -1,6 +1,6 @@
 use anyhow::Result;
 use derive_more::{Display, Error};
-use gst::{prelude::*, BufferMap};
+use gst::prelude::*;
 
 use std::sync::mpsc::Receiver;
 
@@ -19,32 +19,8 @@ struct ErrorMessage {
     source: glib::Error,
 }
 
-pub struct VideoSample {
-    pub sample: gst::Sample,
-}
-
-impl VideoSample {
-    pub fn pts(&self) -> Option<gst::ClockTime> {
-        if let Some(buffer_ref) = self.sample.buffer() {
-            return buffer_ref.pts();
-        }
-        return None;
-    }
-
-    pub fn data(&self) -> Option<BufferMap<gst::buffer::Readable>> {
-        if let Some(buffer_ref) = self.sample.buffer() {
-            if let Ok(buffer_map) = buffer_ref.map_readable() {
-                return Some(buffer_map);
-            } else {
-                eprintln!("Failed to map buffer");
-            }
-        }
-        None
-    }
-}
-
 pub struct Sampler {
-    pub sample_rx: Receiver<VideoSample>,
+    pub sample_rx: Receiver<gst::Sample>,
     appsink: gst_app::AppSink,
     pipeline: gst::Pipeline,
     bus: gst::Bus,
@@ -53,7 +29,7 @@ pub struct Sampler {
 
 pub enum SamplerEvent {
     Seekable(core::VideoSeekable),
-    Event(core::VideoEvent),
+    Event(core::VideoState),
 }
 
 impl Sampler {
@@ -93,7 +69,7 @@ impl Sampler {
                 .new_sample(move |appsink| {
                     // Pull the sample in question out of the appsink's buffer.
                     let sample = appsink.pull_sample().map_err(|_| gst::FlowError::Eos)?;
-                    if let Err(e) = sample_tx.send(VideoSample { sample }) {
+                    if let Err(e) = sample_tx.send(sample) {
                         eprintln!("send error: {e}");
                     }
                     Ok(gst::FlowSuccess::Ok)
@@ -114,22 +90,22 @@ impl Sampler {
         })
     }
 
-    pub fn pause(&self) -> Result<()> {
+    pub fn pause(&self) -> Result<bool> {
         self.pipeline.set_state(gst::State::Paused)?;
-        Ok(())
+        Ok(true)
     }
 
-    pub fn play(&self) -> Result<()> {
+    pub fn play(&self) -> Result<bool> {
         self.pipeline.set_state(gst::State::Playing)?;
-        Ok(())
+        Ok(true)
     }
 
-    pub fn stop(&self) -> Result<()> {
+    pub fn stop(&self) -> Result<bool> {
         self.pipeline.set_state(gst::State::Null)?;
-        Ok(())
+        Ok(true)
     }
 
-    pub fn seek(&self, target: &core::Timestamp) {
+    pub fn seek(&self, target: &core::Timestamp) -> Result<bool> {
         let seek_event = gst::event::Seek::new(
             1.0,
             gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
@@ -139,6 +115,16 @@ impl Sampler {
             gst::ClockTime::ZERO,
         );
         self.appsink.send_event(seek_event);
+        Ok(true)
+    }
+
+    pub fn handle_command(&mut self, msg: &core::Message) -> Result<bool> {
+        match msg {
+            core::Message::Command(core::VideoState::Play) => self.play(),
+            core::Message::Command(core::VideoState::Pause) => self.pause(),
+            core::Message::Command(core::VideoState::Seek(timestamp)) => self.seek(&timestamp),
+            _ => Ok(false),
+        }
     }
 
     pub fn poll_event(&mut self) -> Option<SamplerEvent> {
@@ -154,9 +140,9 @@ impl Sampler {
                 }
                 MessageView::StateChanged(state_changed) => {
                     if state_changed.current() == gst::State::Paused && !self.seekable_queried {
-                        self.seekable_queried = true;
                         let mut seeking = gst::query::Seeking::new(gst::Format::Time);
                         if self.pipeline.query(&mut seeking) {
+                            self.seekable_queried = true;
                             let (seekable, start, end) = seeking.result();
                             if seekable && start.value() >= 0 && end.value() >= 0 {
                                 return Some(SamplerEvent::Seekable(core::VideoSeekable {
@@ -166,12 +152,17 @@ impl Sampler {
                             }
                         }
                     } else {
+                        eprintln!(
+                            "State change: {:?} {:?}",
+                            state_changed.old(),
+                            state_changed.current()
+                        );
                         return match state_changed.current() {
                             gst::State::Paused => {
-                                Some(SamplerEvent::Event(core::VideoEvent::Pause))
+                                Some(SamplerEvent::Event(core::VideoState::Pause))
                             }
                             gst::State::Playing => {
-                                Some(SamplerEvent::Event(core::VideoEvent::Play))
+                                Some(SamplerEvent::Event(core::VideoState::Play))
                             }
                             _ => None,
                         };

@@ -1,48 +1,35 @@
 use derive_more::{Add, Div, Mul, Sub};
 
-pub enum Message {
-    Video(VideoMessage),
-}
-
-pub enum VideoMessage {
-    Info(VideoInfo),
-    Event(VideoEvent),
-    Command(VideoCommand),
-    Stream(FrameMessage),
-}
-
 #[derive(Debug)]
-pub struct VideoInfo {
-    pub resolution: [u32; 2],
-    pub path: String,
+pub enum Message {
+    Event(VideoState),
+    Command(VideoState),
+    Sample(VideoSample),
+    Seekable(VideoSeekable),
+    Shutdown,
 }
 
+#[derive(Debug, PartialEq)]
 pub struct VideoSeekable {
     pub start: Timestamp,
     pub end: Timestamp,
 }
 
-#[derive(PartialEq)]
-pub enum VideoEvent {
-    Open(Box<std::path::Path>),
+#[derive(Debug, PartialEq)]
+pub enum VideoState {
+    Open(String),
     Seek(Timestamp),
     Pause,
     Play,
     Stop,
 }
 
-pub struct VideoCommand(VideoEvent);
-
-pub struct FrameMessage {
-    pts: Timestamp,
-    data: FrameData,
-}
-
-pub enum FrameData {
-    ImageData,
-    TrackingData,
-    Annotation,
-    EndOfStream,
+#[derive(Debug)]
+pub struct VideoSample {
+    pub id: String,
+    pub width: u32,
+    pub height: u32,
+    pub pts: Option<Timestamp>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Add, Div, Mul, Sub)]
