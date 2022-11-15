@@ -1,5 +1,5 @@
-use crate::core::message_bus;
-use crate::core::BioTracker;
+use crate::core::{message_bus, Sampler};
+
 use ui::app::BioTrackerUI;
 
 mod core;
@@ -13,8 +13,8 @@ fn main() {
     });
 
     std::thread::spawn(move || {
-        let mut biotracker = BioTracker::new().unwrap();
-        biotracker.run();
+        let mut video = Sampler::new().unwrap();
+        video.run().unwrap();
     });
 
     let options = eframe::NativeOptions {
