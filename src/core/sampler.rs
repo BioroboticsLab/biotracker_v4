@@ -152,11 +152,6 @@ impl Sampler {
                             }
                         }
                     } else {
-                        eprintln!(
-                            "State change: {:?} {:?}",
-                            state_changed.old(),
-                            state_changed.current()
-                        );
                         return match state_changed.current() {
                             gst::State::Paused => {
                                 Some(SamplerEvent::Event(core::VideoState::Pause))

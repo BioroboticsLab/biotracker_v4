@@ -1,7 +1,5 @@
-use std::sync::mpsc::{Receiver, Sender};
-
 use crate::{
-    core::{BufferManager, Message, Timestamp, VideoSeekable, VideoState},
+    core::{message_bus::Client, BufferManager, Message, Timestamp, VideoSeekable, VideoState},
     *,
 };
 
@@ -15,8 +13,7 @@ struct PersistentState {
 
 pub struct BioTrackerUI {
     persistent_state: PersistentState,
-    msg_tx: std::sync::mpsc::Sender<Message>,
-    msg_rx: std::sync::mpsc::Receiver<Message>,
+    msg_bus: Client,
     buffer_manager: BufferManager,
     video_scale: f32,
     play_state: VideoState,
@@ -26,11 +23,7 @@ pub struct BioTrackerUI {
 }
 
 impl BioTrackerUI {
-    pub fn new(
-        cc: &eframe::CreationContext,
-        msg_tx: Sender<Message>,
-        msg_rx: Receiver<Message>,
-    ) -> Option<Self> {
+    pub fn new(cc: &eframe::CreationContext) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
         cc.egui_ctx.set_pixels_per_point(1.5);
 
@@ -40,10 +33,13 @@ impl BioTrackerUI {
             scaling: 1.5,
         };
 
+        let msg_bus = Client::new().unwrap();
+        msg_bus.subscribe("Seekable").unwrap();
+        msg_bus.subscribe("Event").unwrap();
+        msg_bus.subscribe("Sample").unwrap();
         Some(Self {
             persistent_state,
-            msg_tx,
-            msg_rx,
+            msg_bus,
             buffer_manager: BufferManager::new(),
             video_scale: 1.0,
             play_state: VideoState::Stop,
@@ -56,7 +52,7 @@ impl BioTrackerUI {
     pub fn filemenu(&mut self) {
         if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
             if let Some(path_str) = pathbuf.to_str() {
-                self.msg_tx
+                self.msg_bus
                     .send(Message::Command(VideoState::Open(path_str.to_owned())))
                     .unwrap();
             } else {
@@ -72,8 +68,8 @@ impl eframe::App for BioTrackerUI {
         if zoom_delta != 1.0 {
             self.video_scale *= zoom_delta;
         }
-        if let Ok(msg) = self.msg_rx.try_recv() {
-            eprintln!("Ui: {:?}", msg);
+        if let Ok(Some(msg)) = self.msg_bus.poll(0) {
+            //eprintln!("Ui: {:?}", msg);
             match msg {
                 Message::Sample(sample) => {
                     let image_buffer = self.buffer_manager.get(&sample.id).unwrap();
@@ -107,7 +103,7 @@ impl eframe::App for BioTrackerUI {
                 Message::Event(video_state) => {
                     self.play_state = video_state;
                 }
-                _ => {}
+                _ => panic!("Unexpected message"),
             }
         }
 
@@ -140,13 +136,13 @@ impl eframe::App for BioTrackerUI {
                     if let Some(seekable) = &self.seekable {
                         if self.play_state == VideoState::Play {
                             if ui.add(egui::Button::new("⏸")).clicked() {
-                                self.msg_tx
+                                self.msg_bus
                                     .send(Message::Command(VideoState::Pause))
                                     .unwrap();
                             }
                         } else {
                             if ui.add(egui::Button::new("⏵")).clicked() {
-                                self.msg_tx
+                                self.msg_bus
                                     .send(Message::Command(VideoState::Play))
                                     .unwrap();
                             }
@@ -163,7 +159,7 @@ impl eframe::App for BioTrackerUI {
                                 .show_value(false),
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
-                            self.msg_tx
+                            self.msg_bus
                                 .send(Message::Command(VideoState::Seek(self.current_pts)))
                                 .unwrap();
                         }
@@ -210,6 +206,6 @@ impl eframe::App for BioTrackerUI {
     }
 
     fn on_exit(&mut self) {
-        self.msg_tx.send(Message::Shutdown).unwrap();
+        self.msg_bus.send(Message::Shutdown).unwrap();
     }
 }

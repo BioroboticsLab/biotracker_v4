@@ -13,7 +13,6 @@ fn initialize_texture(
     width: u32,
     height: u32,
 ) -> (wgpu::Texture, wgpu::TextureView, egui::TextureId) {
-    eprintln!("Initialize texture");
     let device = &render_state.device;
     let mut renderer = render_state.renderer.write();
     let handle = device.create_texture(&wgpu::TextureDescriptor {

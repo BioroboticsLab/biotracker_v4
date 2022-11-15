@@ -1,22 +1,23 @@
-use std::sync::mpsc::{Receiver, Sender};
+use anyhow::Result;
 
-use super::{BufferManager, Message, Sampler, SamplerEvent, Timestamp, VideoSample, VideoState};
+use super::{
+    message_bus::Client, BufferManager, Message, Sampler, SamplerEvent, Timestamp, VideoSample,
+    VideoState,
+};
 
 pub struct BioTracker {
     buffer_manager: BufferManager,
     video_sampler: Option<Sampler>,
-    msg_tx: Sender<Message>,
-    msg_rx: Receiver<Message>,
+    msg_bus: Client,
 }
 
 impl BioTracker {
-    pub fn new(msg_tx: Sender<Message>, msg_rx: Receiver<Message>) -> Self {
-        Self {
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             buffer_manager: BufferManager::new(),
             video_sampler: None,
-            msg_tx,
-            msg_rx,
-        }
+            msg_bus: Client::new()?,
+        })
     }
 
     pub fn open_media(&mut self, path: &str) {
@@ -29,6 +30,8 @@ impl BioTracker {
     }
 
     pub fn run(&mut self) {
+        self.msg_bus.subscribe("Command").unwrap();
+        self.msg_bus.subscribe("Shutdown").unwrap();
         loop {
             if let Some(sampler) = &mut self.video_sampler {
                 if let Ok(sample) = sampler.sample_rx.try_recv() {
@@ -48,7 +51,7 @@ impl BioTracker {
                         image_buffer.as_slice_mut().clone_from_slice(data_slice);
                     }
 
-                    self.msg_tx
+                    self.msg_bus
                         .send(Message::Sample(VideoSample {
                             id: image_buffer.id().to_owned(),
                             width,
@@ -62,17 +65,17 @@ impl BioTracker {
             if let Some(sampler) = &mut self.video_sampler {
                 match sampler.poll_event() {
                     Some(SamplerEvent::Seekable(seekable)) => {
-                        self.msg_tx.send(Message::Seekable(seekable)).unwrap();
+                        self.msg_bus.send(Message::Seekable(seekable)).unwrap();
                     }
                     Some(SamplerEvent::Event(video_state)) => {
-                        self.msg_tx.send(Message::Event(video_state)).unwrap();
+                        self.msg_bus.send(Message::Event(video_state)).unwrap();
                     }
                     None => {}
                 }
             }
 
-            if let Ok(msg) = self.msg_rx.try_recv() {
-                eprintln!("Core: {:?}", msg);
+            if let Ok(Some(msg)) = self.msg_bus.poll(0) {
+                //eprintln!("Core: {:?}", msg);
                 let mut handled = false;
                 if let Some(sampler) = &mut self.video_sampler {
                     handled |= sampler.handle_command(&msg).unwrap();
@@ -94,7 +97,7 @@ impl BioTracker {
                             }
                             break;
                         }
-                        _ => todo!(),
+                        _ => panic!("Unexpected message"),
                     }
                 }
             }

@@ -1,3 +1,4 @@
+use crate::core::message_bus;
 use crate::core::BioTracker;
 use ui::app::BioTrackerUI;
 
@@ -6,10 +7,13 @@ mod ui;
 mod util;
 
 fn main() {
-    let (ui_tx, core_rx) = std::sync::mpsc::channel();
-    let (core_tx, ui_rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let mut biotracker = BioTracker::new(core_tx, core_rx);
+        let server = message_bus::Server::new().unwrap();
+        server.run().unwrap();
+    });
+
+    std::thread::spawn(move || {
+        let mut biotracker = BioTracker::new().unwrap();
         biotracker.run();
     });
 
@@ -27,6 +31,6 @@ fn main() {
     eframe::run_native(
         "BioTracker",
         options,
-        Box::new(|cc| Box::new(BioTrackerUI::new(cc, ui_tx, ui_rx).unwrap())),
+        Box::new(|cc| Box::new(BioTrackerUI::new(cc).unwrap())),
     );
 }

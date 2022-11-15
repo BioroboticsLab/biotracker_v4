@@ -1,4 +1,5 @@
 pub mod biotracker;
+pub mod message_bus;
 pub mod protocol;
 pub mod sampler;
 pub mod shared_buffer;
