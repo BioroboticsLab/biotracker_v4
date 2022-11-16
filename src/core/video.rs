@@ -8,19 +8,6 @@ use gst::element_error;
 use gst::prelude::*;
 use std::sync::mpsc::{channel, Receiver, Sender};
 
-#[derive(Debug, Display, Error)]
-#[display(fmt = "Missing element {}", _0)]
-struct MissingElement(#[error(not(source))] &'static str);
-
-#[derive(Debug, Display, Error)]
-#[display(fmt = "Received error from {}: {} (debug: {:?})", src, error, debug)]
-struct ErrorMessage {
-    src: String,
-    error: String,
-    debug: Option<String>,
-    source: glib::Error,
-}
-
 struct SampleMessage {
     sample: gst::Sample,
     info: gst_video::VideoInfo,
@@ -237,10 +224,15 @@ impl Sampler {
 
                     match msg.view() {
                         MessageView::Warning(warn) => {
-                            eprintln!("{:?}", warn);
+                            eprintln!("GStreamer Warning: {:?}", warn);
                         }
                         MessageView::Error(err) => {
-                            eprintln!("{:?}", err);
+                            eprintln!(
+                                "Error from {:?}: {} ({:?})",
+                                err.src().map(|s| s.path_string()),
+                                err.error(),
+                                err.debug()
+                            );
                         }
                         MessageView::StateChanged(state_changed) => {
                             if state_changed.current() == gst::State::Paused
