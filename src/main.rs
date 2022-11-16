@@ -1,5 +1,5 @@
-use crate::core::{message_bus, Sampler};
-
+use crate::core::{message_bus, CommandLineArguments, Sampler};
+use clap::Parser;
 use ui::app::BioTrackerUI;
 
 mod core;
@@ -7,13 +7,14 @@ mod ui;
 mod util;
 
 fn main() {
+    let args = CommandLineArguments::parse();
     std::thread::spawn(move || {
         let server = message_bus::Server::new().unwrap();
         server.run().unwrap();
     });
 
     std::thread::spawn(move || {
-        let mut video = Sampler::new().unwrap();
+        let mut video = Sampler::new(&args).unwrap();
         video.run().unwrap();
     });
 

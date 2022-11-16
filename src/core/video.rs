@@ -7,6 +7,7 @@ use gst::prelude::*;
 
 use crate::core::{self, Timestamp};
 
+use super::CommandLineArguments;
 use super::{message_bus::Client, BufferManager, Message, VideoSample, VideoSeekable, VideoState};
 
 #[derive(Debug, Display, Error)]
@@ -40,13 +41,12 @@ pub struct Sampler {
 }
 
 impl Sampler {
-    pub fn new() -> Result<Self> {
+    pub fn new(args: &CommandLineArguments) -> Result<Self> {
         gst::init()?;
         let msg_bus = Client::new()?;
         let buffer_manager = BufferManager::new();
         let (sample_tx, sample_rx) = channel();
-
-        Ok(Sampler {
+        let mut sampler = Sampler {
             msg_bus,
             buffer_manager,
             sample_tx,
@@ -55,7 +55,12 @@ impl Sampler {
             pipeline: None,
             gst_bus: None,
             seekable_queried: false,
-        })
+        };
+        if let Some(video) = &args.video {
+            let _ = sampler.open(&video).map_err(|e| eprintln!("{e}"));
+        }
+
+        Ok(sampler)
     }
 
     pub fn open(&mut self, uri: &str) -> Result<()> {
