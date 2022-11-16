@@ -7,4 +7,6 @@ pub struct CommandLineArguments {
     /// Open video file on startup
     #[arg(short, long)]
     pub video: Option<String>,
+    #[arg(short, long)]
+    pub inspect_bus: Option<String>,
 }

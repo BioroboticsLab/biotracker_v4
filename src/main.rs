@@ -8,6 +8,16 @@ mod util;
 
 fn main() {
     let args = CommandLineArguments::parse();
+
+    if let Some(topic) = &args.inspect_bus {
+        let msg_bus = message_bus::Client::new().unwrap();
+        msg_bus.subscribe(topic).unwrap();
+        while let Ok(Some(msg)) = msg_bus.poll(-1) {
+            eprintln!("{:?}", msg);
+        }
+        return;
+    }
+
     std::thread::spawn(move || {
         let server = message_bus::Server::new().unwrap();
         server.run().unwrap();
