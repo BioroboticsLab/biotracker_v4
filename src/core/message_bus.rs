@@ -54,11 +54,12 @@ pub struct Client {
 
 fn to_topic(msg: &BioTrackerMessage) -> &str {
     let topic = match msg {
-        BioTrackerMessage::Event(_) => "Event",
         BioTrackerMessage::Command(_) => "Command",
-        BioTrackerMessage::Sample(_) => "Sample",
+        BioTrackerMessage::Event(_) => "Event",
         BioTrackerMessage::Seekable(_) => "Seekable",
         BioTrackerMessage::Shutdown => "Shutdown",
+        BioTrackerMessage::Image(_) => "Image",
+        BioTrackerMessage::Features(_) => "Feature",
     };
     topic
 }

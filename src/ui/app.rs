@@ -1,9 +1,5 @@
-use crate::{
-    core::{message_bus::Client, BufferManager, Message, Timestamp, VideoSeekable, VideoState},
-    *,
-};
-
-use super::TextureImage;
+use super::video_plane::VideoPlane;
+use crate::core::{message_bus::Client, Message, Seekable, State, Timestamp};
 
 struct PersistentState {
     settings_open: bool,
@@ -14,11 +10,10 @@ struct PersistentState {
 pub struct BioTrackerUI {
     persistent_state: PersistentState,
     msg_bus: Client,
-    buffer_manager: BufferManager,
     video_scale: f32,
-    play_state: VideoState,
-    video_plane: Option<ui::TextureImage>,
-    seekable: Option<VideoSeekable>,
+    play_state: State,
+    video_plane: VideoPlane,
+    seekable: Option<Seekable>,
     current_pts: Timestamp,
 }
 
@@ -36,14 +31,14 @@ impl BioTrackerUI {
         let msg_bus = Client::new().unwrap();
         msg_bus.subscribe("Seekable").unwrap();
         msg_bus.subscribe("Event").unwrap();
-        msg_bus.subscribe("Sample").unwrap();
+        msg_bus.subscribe("Image").unwrap();
+        msg_bus.subscribe("Feature").unwrap();
         Some(Self {
             persistent_state,
             msg_bus,
-            buffer_manager: BufferManager::new(),
             video_scale: 1.0,
-            play_state: VideoState::Stop,
-            video_plane: None,
+            play_state: State::Stop,
+            video_plane: VideoPlane::new(),
             seekable: None,
             current_pts: Timestamp(0),
         })
@@ -53,7 +48,7 @@ impl BioTrackerUI {
         if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
             if let Some(path_str) = pathbuf.to_str() {
                 self.msg_bus
-                    .send(Message::Command(VideoState::Open(path_str.to_owned())))
+                    .send(Message::Command(State::Open(path_str.to_owned())))
                     .unwrap();
             } else {
                 eprintln!("Failed to get unicode string from pathbuf");
@@ -66,42 +61,24 @@ impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let zoom_delta = ctx.input().zoom_delta();
         if zoom_delta != 1.0 {
-            self.video_scale *= zoom_delta;
+            self.video_scale = 0.1f32.max(self.video_scale * zoom_delta);
         }
         if let Ok(Some(msg)) = self.msg_bus.poll(0) {
             //eprintln!("Ui: {:?}", msg);
             match msg {
-                Message::Sample(sample) => {
-                    let image_buffer = self.buffer_manager.get(&sample.id).unwrap();
+                Message::Image(img) => {
                     let render_state = frame.wgpu_render_state().unwrap();
-                    if let Some(pts) = sample.pts {
-                        self.current_pts = pts;
-                    }
-
-                    if self.video_plane.is_none() {
-                        self.video_plane = Some(TextureImage::new(
-                            &render_state,
-                            sample.width,
-                            sample.height,
-                        ));
-                    }
-
-                    if let Some(video_plane) = &mut self.video_plane {
-                        unsafe {
-                            video_plane.update(
-                                &render_state,
-                                sample.width,
-                                sample.height,
-                                image_buffer.as_slice(),
-                            )
-                        }
-                    }
+                    self.current_pts = img.pts;
+                    self.video_plane.update_texture(render_state, &img);
                 }
                 Message::Seekable(seekable) => {
                     self.seekable = Some(seekable);
                 }
                 Message::Event(video_state) => {
                     self.play_state = video_state;
+                }
+                Message::Features(features) => {
+                    self.video_plane.update_features(features);
                 }
                 _ => panic!("Unexpected message"),
             }
@@ -134,17 +111,13 @@ impl eframe::App for BioTrackerUI {
             egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if let Some(seekable) = &self.seekable {
-                        if self.play_state == VideoState::Play {
+                        if self.play_state == State::Play {
                             if ui.add(egui::Button::new("⏸")).clicked() {
-                                self.msg_bus
-                                    .send(Message::Command(VideoState::Pause))
-                                    .unwrap();
+                                self.msg_bus.send(Message::Command(State::Pause)).unwrap();
                             }
                         } else {
                             if ui.add(egui::Button::new("⏵")).clicked() {
-                                self.msg_bus
-                                    .send(Message::Command(VideoState::Play))
-                                    .unwrap();
+                                self.msg_bus.send(Message::Command(State::Play)).unwrap();
                             }
                         }
 
@@ -160,7 +133,7 @@ impl eframe::App for BioTrackerUI {
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
                             self.msg_bus
-                                .send(Message::Command(VideoState::Seek(self.current_pts)))
+                                .send(Message::Command(State::Seek(self.current_pts)))
                                 .unwrap();
                         }
                         ui.label(&seekable.end.to_string());
@@ -173,16 +146,12 @@ impl eframe::App for BioTrackerUI {
             });
 
             egui::CentralPanel::default().show(ctx, |ui| {
-                egui::ScrollArea::both().show(ui, |ui| {
-                    ui.with_layout(
-                        egui::Layout::centered_and_justified(egui::Direction::TopDown),
-                        |ui| {
-                            if let Some(video_plane) = &self.video_plane {
-                                video_plane.show(ui, self.video_scale);
-                            }
-                        },
-                    );
-                });
+                egui::ScrollArea::both()
+                    .max_width(f32::INFINITY)
+                    .max_height(f32::INFINITY)
+                    .show(ui, |ui| {
+                        self.video_plane.show(ui, self.video_scale);
+                    });
                 egui::Window::new("Settings")
                     .open(&mut self.persistent_state.settings_open)
                     .resizable(false)

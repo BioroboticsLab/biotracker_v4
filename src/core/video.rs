@@ -1,14 +1,12 @@
-use std::sync::mpsc::{channel, Receiver, Sender};
-
+use super::{
+    message_bus::Client, BufferManager, CommandLineArguments, ImageData, Message, Seekable, State,
+    Timestamp,
+};
 use anyhow::Result;
 use derive_more::{Display, Error};
 use gst::element_error;
 use gst::prelude::*;
-
-use crate::core::{self, Timestamp};
-
-use super::CommandLineArguments;
-use super::{message_bus::Client, BufferManager, Message, VideoSample, VideoSeekable, VideoState};
+use std::sync::mpsc::{channel, Receiver, Sender};
 
 #[derive(Debug, Display, Error)]
 #[display(fmt = "Missing element {}", _0)]
@@ -180,7 +178,7 @@ impl Sampler {
         Ok(())
     }
 
-    pub fn seek(&self, target: &core::Timestamp) -> Result<()> {
+    pub fn seek(&self, target: &Timestamp) -> Result<()> {
         if let Some(appsink) = &self.appsink {
             let seek_event = gst::event::Seek::new(
                 1.0,
@@ -197,11 +195,11 @@ impl Sampler {
 
     pub fn handle_command(&mut self, msg: &Message) -> Result<()> {
         match msg {
-            Message::Command(VideoState::Play) => self.play(),
-            Message::Command(VideoState::Pause) => self.pause(),
-            Message::Command(VideoState::Stop) => self.stop(),
-            Message::Command(VideoState::Seek(timestamp)) => self.seek(&timestamp),
-            Message::Command(VideoState::Open(path)) => self.open(path),
+            Message::Command(State::Play) => self.play(),
+            Message::Command(State::Pause) => self.pause(),
+            Message::Command(State::Stop) => self.stop(),
+            Message::Command(State::Seek(timestamp)) => self.seek(&timestamp),
+            Message::Command(State::Open(path)) => self.open(path),
             Message::Shutdown => self.stop(),
             _ => panic!("Unexpected command"),
         }
@@ -220,11 +218,11 @@ impl Sampler {
                     image_buffer.as_slice_mut().clone_from_slice(data_slice);
                 }
                 self.msg_bus
-                    .send(Message::Sample(VideoSample {
-                        id: image_buffer.id().to_owned(),
+                    .send(Message::Image(ImageData {
+                        pts: sample_msg.pts,
+                        shm_id: image_buffer.id().to_owned(),
                         width: sample_msg.info.width(),
                         height: sample_msg.info.height(),
-                        pts: Some(sample_msg.pts),
                     }))
                     .unwrap();
             }
@@ -258,7 +256,7 @@ impl Sampler {
                                     self.seekable_queried = true;
                                     let (seekable, start, end) = seeking.result();
                                     if seekable && start.value() >= 0 && end.value() >= 0 {
-                                        self.msg_bus.send(Message::Seekable(VideoSeekable {
+                                        self.msg_bus.send(Message::Seekable(Seekable {
                                             start: Timestamp(start.value() as u64),
                                             end: Timestamp(end.value() as u64),
                                         }))?;
@@ -266,8 +264,8 @@ impl Sampler {
                                 }
                             } else {
                                 let event_msg = match state_changed.current() {
-                                    gst::State::Paused => Some(Message::Event(VideoState::Pause)),
-                                    gst::State::Playing => Some(Message::Event(VideoState::Play)),
+                                    gst::State::Paused => Some(Message::Event(State::Pause)),
+                                    gst::State::Playing => Some(Message::Event(State::Play)),
                                     _ => None,
                                 };
                                 if let Some(msg) = event_msg {

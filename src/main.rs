@@ -18,6 +18,11 @@ fn main() {
         video.run().unwrap();
     });
 
+    std::thread::spawn(move || {
+        let mut tracker = crate::core::tracker::Tracker::new().unwrap();
+        tracker.run().unwrap();
+    });
+
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,
         initial_window_size: Some([1280.0, 1024.0].into()),

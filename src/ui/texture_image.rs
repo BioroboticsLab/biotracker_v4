@@ -88,11 +88,4 @@ impl TextureImage {
             self.egui_id,
         );
     }
-
-    pub fn show(&self, ui: &mut egui::Ui, scale: f32) {
-        let aspect_ratio = self.height as f32 / self.width as f32;
-        let width = ui.available_width() * scale;
-        let height = width * aspect_ratio;
-        ui.add(egui::Image::new(self.egui_id, [width, height]));
-    }
 }
