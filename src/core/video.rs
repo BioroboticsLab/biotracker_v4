@@ -3,7 +3,6 @@ use super::{
     Timestamp,
 };
 use anyhow::Result;
-use derive_more::{Display, Error};
 use gst::element_error;
 use gst::prelude::*;
 use std::sync::mpsc::{channel, Receiver, Sender};

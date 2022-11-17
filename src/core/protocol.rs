@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 use derive_more::{Add, Div, Mul, Sub};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
     /// Playback messages
+    UserAction(Action),
     Command(State),
     Event(State),
     Seekable(Seekable),
@@ -11,15 +14,22 @@ pub enum Message {
     /// Sample messages
     Image(ImageData),
     Features(ImageFeatures),
+    Entities(Entities),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub enum Action {
+    AddEntity,
+    RemoveEntity,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SkeletonNode {
     /// Location of the node in image pixels
     pub point: Point,
@@ -27,7 +37,7 @@ pub struct SkeletonNode {
     pub score: f32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SkeletonEdge {
     /// Index of origin node
     pub from: usize,
@@ -35,7 +45,7 @@ pub struct SkeletonEdge {
     pub to: usize,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ImageFeature {
     /// List of detected skeleton nodes
     pub nodes: Vec<SkeletonNode>,
@@ -49,6 +59,15 @@ pub struct ImageFeature {
 pub struct ImageFeatures {
     pub pts: Timestamp,
     pub features: Vec<ImageFeature>,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
+pub struct EntityID(pub u128);
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Entities {
+    pub pts: Timestamp,
+    pub entities: HashMap<EntityID, ImageFeature>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

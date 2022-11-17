@@ -33,6 +33,11 @@ fn main() {
         tracker.run().unwrap();
     });
 
+    std::thread::spawn(move || {
+        let mut matcher = crate::core::matching::Matcher::new().unwrap();
+        matcher.run().unwrap();
+    });
+
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,
         initial_window_size: Some([1280.0, 1024.0].into()),

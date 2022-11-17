@@ -1,10 +1,17 @@
-use super::texture_image::TextureImage;
-use crate::core::{BufferManager, ImageData, ImageFeatures};
+use super::{
+    color::{Palette, ALPHABET},
+    texture_image::TextureImage,
+};
+use crate::core::{BufferManager, Entities, ImageData, ImageFeature, ImageFeatures};
 
 pub struct VideoPlane {
     buffer_manager: BufferManager,
     texture_image: Option<TextureImage>,
     last_features: Option<ImageFeatures>,
+    last_entities: Option<Entities>,
+    color_palette: Palette,
+    draw_features: bool,
+    draw_entities: bool,
 }
 
 impl VideoPlane {
@@ -13,6 +20,10 @@ impl VideoPlane {
             buffer_manager: BufferManager::new(),
             texture_image: None,
             last_features: None,
+            last_entities: None,
+            color_palette: Palette { colors: &ALPHABET },
+            draw_features: false,
+            draw_entities: true,
         }
     }
 
@@ -38,6 +49,41 @@ impl VideoPlane {
         self.last_features = Some(features);
     }
 
+    pub fn update_entities(&mut self, entities: Entities) {
+        self.last_entities = Some(entities);
+    }
+
+    fn paint_feature(
+        &self,
+        painter: &egui::Painter,
+        to_screen: &egui::emath::RectTransform,
+        feature: &ImageFeature,
+        color: egui::Color32,
+    ) {
+        let (nodes, edges) = (&feature.nodes, &feature.edges);
+        for edge in edges {
+            let point_from = &nodes[edge.from].point;
+            let point_to = &nodes[edge.to].point;
+            let from = to_screen * egui::pos2(point_from.x, point_from.y);
+            let to = to_screen * egui::pos2(point_to.x, point_to.y);
+            painter.line_segment([from, to], egui::Stroke::new(2.0, egui::Color32::BLACK));
+        }
+        for node in nodes {
+            let point = to_screen * egui::pos2(node.point.x, node.point.y);
+            painter.circle(
+                point,
+                5.0,
+                color,
+                egui::Stroke::new(1.0, egui::Color32::BLACK),
+            )
+        }
+    }
+
+    pub fn show_settings(&mut self, ui: &mut egui::Ui) {
+        ui.checkbox(&mut self.draw_features, "Draw unmatched entity features");
+        ui.checkbox(&mut self.draw_entities, "Draw matched entities");
+    }
+
     pub fn show(&self, ui: &mut egui::Ui, scale: f32) {
         if let Some(texture_image) = &self.texture_image {
             let aspect_ratio = texture_image.height as f32 / texture_image.width as f32;
@@ -59,27 +105,18 @@ impl VideoPlane {
                 ),
                 response.rect,
             );
-            //let from_screen = to_screen.inverse();
-
             if let Some(features) = &self.last_features {
-                for feature in &features.features {
-                    let (nodes, edges) = (&feature.nodes, &feature.edges);
-                    for node in nodes {
-                        let point = to_screen * egui::pos2(node.point.x, node.point.y);
-                        painter.circle(
-                            point,
-                            3.0,
-                            egui::Color32::GREEN,
-                            egui::Stroke::new(1.0, egui::Color32::BLACK),
-                        )
+                if self.draw_features {
+                    for feature in &features.features {
+                        self.paint_feature(&painter, &to_screen, feature, egui::Color32::GREEN);
                     }
-                    for edge in edges {
-                        let point_from = &nodes[edge.from].point;
-                        let point_to = &nodes[edge.to].point;
-                        let from = to_screen * egui::pos2(point_from.x, point_from.y);
-                        let to = to_screen * egui::pos2(point_to.x, point_to.y);
-                        painter
-                            .line_segment([from, to], egui::Stroke::new(1.0, egui::Color32::BLACK));
+                }
+            }
+            if let Some(entities) = &self.last_entities {
+                if self.draw_entities {
+                    for (uuid, feature) in &entities.entities {
+                        let color = self.color_palette.pick(uuid.0);
+                        self.paint_feature(&painter, &to_screen, feature, color);
                     }
                 }
             }

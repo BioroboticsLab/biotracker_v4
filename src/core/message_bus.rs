@@ -60,6 +60,8 @@ fn to_topic(msg: &BioTrackerMessage) -> &str {
         BioTrackerMessage::Shutdown => "Shutdown",
         BioTrackerMessage::Image(_) => "Image",
         BioTrackerMessage::Features(_) => "Feature",
+        BioTrackerMessage::Entities(_) => "Entities",
+        BioTrackerMessage::UserAction(_) => "UserAction",
     };
     topic
 }

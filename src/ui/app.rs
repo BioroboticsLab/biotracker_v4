@@ -1,8 +1,9 @@
 use super::video_plane::VideoPlane;
-use crate::core::{message_bus::Client, Message, Seekable, State, Timestamp};
+use crate::core::{message_bus::Client, Action, Message, Seekable, State, Timestamp};
 
 struct PersistentState {
     settings_open: bool,
+    experiment_open: bool,
     dark_mode: bool,
     scaling: f32,
 }
@@ -24,6 +25,7 @@ impl BioTrackerUI {
 
         let persistent_state = PersistentState {
             settings_open: false,
+            experiment_open: true,
             dark_mode: false,
             scaling: 1.5,
         };
@@ -33,6 +35,7 @@ impl BioTrackerUI {
         msg_bus.subscribe("Event").unwrap();
         msg_bus.subscribe("Image").unwrap();
         msg_bus.subscribe("Feature").unwrap();
+        msg_bus.subscribe("Entities").unwrap();
         Some(Self {
             persistent_state,
             msg_bus,
@@ -63,13 +66,13 @@ impl eframe::App for BioTrackerUI {
         if zoom_delta != 1.0 {
             self.video_scale = 0.1f32.max(self.video_scale * zoom_delta);
         }
-        if let Ok(Some(msg)) = self.msg_bus.poll(0) {
-            //eprintln!("Ui: {:?}", msg);
+        while let Ok(Some(msg)) = self.msg_bus.poll(0) {
             match msg {
                 Message::Image(img) => {
                     let render_state = frame.wgpu_render_state().unwrap();
                     self.current_pts = img.pts;
                     self.video_plane.update_texture(render_state, &img);
+                    break;
                 }
                 Message::Seekable(seekable) => {
                     self.seekable = Some(seekable);
@@ -79,6 +82,9 @@ impl eframe::App for BioTrackerUI {
                 }
                 Message::Features(features) => {
                     self.video_plane.update_features(features);
+                }
+                Message::Entities(entities) => {
+                    self.video_plane.update_entities(entities);
                 }
                 _ => panic!("Unexpected message"),
             }
@@ -99,6 +105,10 @@ impl eframe::App for BioTrackerUI {
                     ui.menu_button("View", |ui| {
                         if ui.button("Settings").clicked() {
                             self.persistent_state.settings_open = true;
+                            ui.close_menu();
+                        }
+                        if ui.button("Experiment").clicked() {
+                            self.persistent_state.experiment_open = true;
                             ui.close_menu();
                         }
                     });
@@ -167,6 +177,23 @@ impl eframe::App for BioTrackerUI {
                         ));
                         if response.drag_released() || response.lost_focus() {
                             ctx.set_pixels_per_point(self.persistent_state.scaling);
+                        }
+                        ui.separator();
+                        self.video_plane.show_settings(ui);
+                    });
+                egui::Window::new("Experiment")
+                    .open(&mut self.persistent_state.experiment_open)
+                    .resizable(false)
+                    .show(ctx, |ui| {
+                        if ui.button("Add Entity").clicked() {
+                            self.msg_bus
+                                .send(Message::UserAction(Action::AddEntity))
+                                .unwrap();
+                        }
+                        if ui.button("Remove Entity").clicked() {
+                            self.msg_bus
+                                .send(Message::UserAction(Action::RemoveEntity))
+                                .unwrap();
                         }
                     });
             });
