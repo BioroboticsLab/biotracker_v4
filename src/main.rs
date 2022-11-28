@@ -1,7 +1,8 @@
-use crate::core::{message_bus, CommandLineArguments, Sampler};
+use crate::core::{message_bus, CommandLineArguments};
 use clap::Parser;
 use ui::app::BioTrackerUI;
 
+mod components;
 mod core;
 mod ui;
 mod util;
@@ -24,17 +25,17 @@ fn main() {
     });
 
     std::thread::spawn(move || {
-        let mut video = Sampler::new(&args).unwrap();
+        let mut video = components::Sampler::new(&args).unwrap();
         video.run().unwrap();
     });
 
     std::thread::spawn(move || {
-        let mut tracker = crate::core::tracker::Tracker::new().unwrap();
+        let mut tracker = components::Tracker::new().unwrap();
         tracker.run().unwrap();
     });
 
     std::thread::spawn(move || {
-        let mut matcher = crate::core::matching::Matcher::new().unwrap();
+        let mut matcher = components::Matcher::new().unwrap();
         matcher.run().unwrap();
     });
 

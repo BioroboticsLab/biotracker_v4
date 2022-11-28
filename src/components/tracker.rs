@@ -1,4 +1,4 @@
-use super::{
+use crate::core::{
     message_bus::Client, ImageFeature, ImageFeatures, Message, Point, SkeletonEdge, SkeletonNode,
 };
 use anyhow::Result;

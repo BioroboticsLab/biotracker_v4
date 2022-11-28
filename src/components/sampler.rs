@@ -1,4 +1,4 @@
-use super::{
+use crate::core::{
     message_bus::Client, BufferManager, CommandLineArguments, ImageData, Message, Seekable, State,
     Timestamp,
 };
