@@ -8,7 +8,7 @@ mod ui;
 mod util;
 
 fn main() {
-    let args = CommandLineArguments::parse();
+    let args = std::sync::Arc::new(CommandLineArguments::parse());
 
     if let Some(topic) = &args.inspect_bus {
         let msg_bus = message_bus::Client::new().unwrap();
@@ -19,7 +19,7 @@ fn main() {
         return;
     }
 
-    crate::core::component::run_components().unwrap();
+    crate::core::component::run_components(args.clone()).unwrap();
 
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,
@@ -35,6 +35,6 @@ fn main() {
     eframe::run_native(
         "BioTracker",
         options,
-        Box::new(|cc| Box::new(BioTrackerUI::new(cc).unwrap())),
+        Box::new(|cc| Box::new(BioTrackerUI::new(cc, args).unwrap())),
     );
 }

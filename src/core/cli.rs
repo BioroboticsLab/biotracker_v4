@@ -1,4 +1,5 @@
 use clap::Parser;
+//use std::sync::Arc;
 
 /// Modular framework for animal tracking
 #[derive(Parser, Debug)]
@@ -9,4 +10,6 @@ pub struct CommandLineArguments {
     pub video: Option<String>,
     #[arg(short, long)]
     pub inspect_bus: Option<String>,
+    #[arg(short, long)]
+    pub entity_count: Option<u64>,
 }

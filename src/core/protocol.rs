@@ -91,6 +91,7 @@ pub enum State {
     Pause,
     Play,
     Stop,
+    EoS,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Add, Div, Mul, Sub)]

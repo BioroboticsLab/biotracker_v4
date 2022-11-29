@@ -1,5 +1,8 @@
 use super::video_plane::VideoPlane;
-use crate::core::{message_bus::Client, Action, Message, Seekable, State, Timestamp};
+use crate::core::{
+    message_bus::Client, Action, CommandLineArguments, Message, Seekable, State, Timestamp,
+};
+use std::sync::Arc;
 
 struct PersistentState {
     settings_open: bool,
@@ -19,7 +22,7 @@ pub struct BioTrackerUI {
 }
 
 impl BioTrackerUI {
-    pub fn new(cc: &eframe::CreationContext) -> Option<Self> {
+    pub fn new(cc: &eframe::CreationContext, args: Arc<CommandLineArguments>) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
         cc.egui_ctx.set_pixels_per_point(1.5);
 
@@ -36,6 +39,11 @@ impl BioTrackerUI {
         msg_bus.subscribe("Image").unwrap();
         msg_bus.subscribe("Feature").unwrap();
         msg_bus.subscribe("Entities").unwrap();
+        if let Some(path) = &args.video {
+            msg_bus
+                .send(Message::Command(State::Open(path.to_owned())))
+                .unwrap();
+        }
         Some(Self {
             persistent_state,
             msg_bus,

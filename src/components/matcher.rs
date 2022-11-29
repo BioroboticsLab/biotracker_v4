@@ -1,11 +1,12 @@
 use crate::core::{
-    message_bus::Client, Action, Component, Entities, EntityID, ImageFeature, ImageFeatures,
-    Message, Timestamp,
+    message_bus::Client, Action, CommandLineArguments, Component, Entities, EntityID, ImageFeature,
+    ImageFeatures, Message, Timestamp,
 };
 use anyhow::Result;
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
 use rand::Rng;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 struct MatchedEntity {
     id: EntityID,
@@ -20,11 +21,16 @@ pub struct Matcher {
 }
 
 impl Component for Matcher {
-    fn new(msg_bus: Client) -> Self {
+    fn new(msg_bus: Client, args: Arc<CommandLineArguments>) -> Self {
+        let expected_entity_count = match args.entity_count {
+            Some(entity_count) => entity_count as usize,
+            None => 0,
+        };
+
         Self {
             msg_bus,
             last_matching: vec![],
-            expected_entity_count: 0,
+            expected_entity_count,
         }
     }
 

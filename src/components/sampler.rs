@@ -1,14 +1,17 @@
 use crate::core::{
-    message_bus::Client, BufferManager, Component, ImageData, Message, Seekable, State, Timestamp,
+    message_bus::Client, BufferManager, CommandLineArguments, Component, ImageData, Message,
+    Seekable, State, Timestamp,
 };
 use anyhow::{anyhow, Result};
 use cv::prelude::*;
 use cv::videoio::VideoCapture;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub struct Video {
     video_capture: VideoCapture,
     frame_number: u64,
+    frame_count: u64,
     fps: f64,
     frame_duration: Duration,
 }
@@ -21,7 +24,7 @@ pub struct Sampler {
 }
 
 impl Component for Sampler {
-    fn new(msg_bus: Client) -> Self {
+    fn new(msg_bus: Client, _: Arc<CommandLineArguments>) -> Self {
         let buffer_manager = BufferManager::new();
         Self {
             msg_bus,
@@ -70,6 +73,10 @@ impl Component for Sampler {
                         height,
                     }))?;
                     playback.frame_number += 1;
+                    if playback.frame_count > 0 && playback.frame_number >= playback.frame_count {
+                        self.play_state = State::EoS;
+                        self.msg_bus.send(Message::Event(State::EoS))?;
+                    }
                 }
             }
         }
@@ -90,6 +97,7 @@ impl Sampler {
         self.playback = Some(Video {
             video_capture,
             frame_number,
+            frame_count,
             fps,
             frame_duration,
         });
