@@ -19,25 +19,7 @@ fn main() {
         return;
     }
 
-    std::thread::spawn(move || {
-        let server = message_bus::Server::new().unwrap();
-        server.run().unwrap();
-    });
-
-    std::thread::spawn(move || {
-        let mut video = components::sampler::Sampler::new(&args).unwrap();
-        video.run().unwrap();
-    });
-
-    std::thread::spawn(move || {
-        let mut tracker = components::Tracker::new().unwrap();
-        tracker.run().unwrap();
-    });
-
-    std::thread::spawn(move || {
-        let mut matcher = components::Matcher::new().unwrap();
-        matcher.run().unwrap();
-    });
+    crate::core::component::run_components().unwrap();
 
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,

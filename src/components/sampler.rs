@@ -1,8 +1,7 @@
 use crate::core::{
-    message_bus::Client, BufferManager, CommandLineArguments, ImageData, Message, Seekable, State,
-    Timestamp,
+    message_bus::Client, BufferManager, Component, ImageData, Message, Seekable, State, Timestamp,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use cv::prelude::*;
 use cv::videoio::VideoCapture;
 use std::time::{Duration, Instant};
@@ -21,24 +20,18 @@ pub struct Sampler {
     playback: Option<Video>,
 }
 
-impl Sampler {
-    pub fn new(args: &CommandLineArguments) -> Result<Self> {
-        let msg_bus = Client::new()?;
+impl Component for Sampler {
+    fn new(msg_bus: Client) -> Self {
         let buffer_manager = BufferManager::new();
-        let mut sampler = Self {
+        Self {
             msg_bus,
             buffer_manager,
             play_state: State::Stop,
             playback: None,
-        };
-        if let Some(video) = &args.video {
-            let _ = sampler.open(&video).map_err(|e| eprintln!("{e}"));
         }
-
-        Ok(sampler)
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe("Command")?;
         self.msg_bus.subscribe("Shutdown")?;
 
@@ -70,20 +63,20 @@ impl Sampler {
                         image_buffer.as_slice_mut().clone_from_slice(data);
                     }
                     let shm_id = image_buffer.id().to_owned();
-                    self.msg_bus
-                        .send(Message::Image(ImageData {
-                            pts: Timestamp::from_framenumber(playback.frame_number, playback.fps),
-                            shm_id,
-                            width,
-                            height,
-                        }))
-                        .unwrap();
+                    self.msg_bus.send(Message::Image(ImageData {
+                        pts: Timestamp::from_framenumber(playback.frame_number, playback.fps),
+                        shm_id,
+                        width,
+                        height,
+                    }))?;
                     playback.frame_number += 1;
                 }
             }
         }
     }
+}
 
+impl Sampler {
     fn open(&mut self, path: &str) -> Result<()> {
         let mut video_capture = VideoCapture::from_file(path, 0)?;
         let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u64;
@@ -150,7 +143,7 @@ impl Sampler {
             Message::Command(State::Seek(timestamp)) => self.seek(&timestamp),
             Message::Command(State::Open(path)) => self.open(path),
             Message::Shutdown => self.stop(),
-            _ => panic!("Unexpected command"),
+            _ => Err(anyhow!("Unexpected command")),
         }
     }
 }

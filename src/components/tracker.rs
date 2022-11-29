@@ -1,5 +1,6 @@
 use crate::core::{
-    message_bus::Client, ImageFeature, ImageFeatures, Message, Point, SkeletonEdge, SkeletonNode,
+    message_bus::Client, Component, ImageFeature, ImageFeatures, Message, Point, SkeletonEdge,
+    SkeletonNode,
 };
 use anyhow::Result;
 
@@ -7,13 +8,12 @@ pub struct Tracker {
     msg_bus: Client,
 }
 
-impl Tracker {
-    pub fn new() -> Result<Self> {
-        let msg_bus = Client::new()?;
-        Ok(Self { msg_bus })
+impl Component for Tracker {
+    fn new(msg_bus: Client) -> Self {
+        Self { msg_bus }
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe("Image")?;
         loop {
             while let Ok(Some(msg)) = self.msg_bus.poll(-1) {

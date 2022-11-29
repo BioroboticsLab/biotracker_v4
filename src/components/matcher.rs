@@ -1,6 +1,6 @@
 use crate::core::{
-    message_bus::Client, Action, Entities, EntityID, ImageFeature, ImageFeatures, Message,
-    Timestamp,
+    message_bus::Client, Action, Component, Entities, EntityID, ImageFeature, ImageFeatures,
+    Message, Timestamp,
 };
 use anyhow::Result;
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
@@ -19,17 +19,16 @@ pub struct Matcher {
     expected_entity_count: usize,
 }
 
-impl Matcher {
-    pub fn new() -> Result<Self> {
-        let msg_bus = Client::new()?;
-        Ok(Self {
+impl Component for Matcher {
+    fn new(msg_bus: Client) -> Self {
+        Self {
             msg_bus,
             last_matching: vec![],
             expected_entity_count: 0,
-        })
+        }
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe("Feature")?;
         self.msg_bus.subscribe("UserAction")?;
         loop {
@@ -54,7 +53,9 @@ impl Matcher {
             }
         }
     }
+}
 
+impl Matcher {
     fn matching(&mut self, mut features_msg: ImageFeatures) -> Entities {
         let pts = features_msg.pts;
         let features = &mut features_msg.features;
