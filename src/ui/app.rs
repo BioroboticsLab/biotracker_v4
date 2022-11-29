@@ -78,6 +78,13 @@ impl eframe::App for BioTrackerUI {
                     self.seekable = Some(seekable);
                 }
                 Message::Event(video_state) => {
+                    match video_state {
+                        State::Open(_) => {
+                            self.video_plane = VideoPlane::new();
+                            self.seekable = None;
+                        }
+                        _ => {}
+                    }
                     self.play_state = video_state;
                 }
                 Message::Features(features) => {

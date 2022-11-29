@@ -97,13 +97,12 @@ pub enum State {
 pub struct Timestamp(pub u64);
 
 impl Timestamp {
-    #[allow(dead_code)]
-    pub fn difference(&self, other: &Timestamp) -> Timestamp {
-        if self.0 > other.0 {
-            return Timestamp(self.0 - other.0);
-        } else {
-            return Timestamp(other.0 - self.0);
-        }
+    pub fn from_framenumber(frame_number: u64, fps: f64) -> Self {
+        Self(((frame_number as f64 / fps) * 1e9) as u64)
+    }
+
+    pub fn to_framenumber(self, fps: f64) -> u64 {
+        ((self.0 as f64 / 1e9) * fps) as u64
     }
 }
 

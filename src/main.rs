@@ -25,7 +25,7 @@ fn main() {
     });
 
     std::thread::spawn(move || {
-        let mut video = components::Sampler::new(&args).unwrap();
+        let mut video = components::sampler::Sampler::new(&args).unwrap();
         video.run().unwrap();
     });
 
