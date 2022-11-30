@@ -1,8 +1,7 @@
 use super::video_plane::VideoPlane;
-use crate::core::{
+use libtracker::{
     message_bus::Client, Action, CommandLineArguments, Message, Seekable, State, Timestamp,
 };
-use std::sync::Arc;
 
 struct PersistentState {
     settings_open: bool,
@@ -22,7 +21,7 @@ pub struct BioTrackerUI {
 }
 
 impl BioTrackerUI {
-    pub fn new(cc: &eframe::CreationContext, args: Arc<CommandLineArguments>) -> Option<Self> {
+    pub fn new(cc: &eframe::CreationContext, args: CommandLineArguments) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
         cc.egui_ctx.set_pixels_per_point(1.5);
 

@@ -1,12 +1,11 @@
-use crate::core::{
+use anyhow::Result;
+use libtracker::{
     message_bus::Client, Action, CommandLineArguments, Component, Entities, EntityID, ImageFeature,
     ImageFeatures, Message, Timestamp,
 };
-use anyhow::Result;
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
 use rand::Rng;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 struct MatchedEntity {
     id: EntityID,
@@ -21,19 +20,6 @@ pub struct Matcher {
 }
 
 impl Component for Matcher {
-    fn new(msg_bus: Client, args: Arc<CommandLineArguments>) -> Self {
-        let expected_entity_count = match args.entity_count {
-            Some(entity_count) => entity_count as usize,
-            None => 0,
-        };
-
-        Self {
-            msg_bus,
-            last_matching: vec![],
-            expected_entity_count,
-        }
-    }
-
     fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe("Feature")?;
         self.msg_bus.subscribe("UserAction")?;
@@ -62,6 +48,19 @@ impl Component for Matcher {
 }
 
 impl Matcher {
+    pub fn new(msg_bus: Client, args: CommandLineArguments) -> Self {
+        let expected_entity_count = match args.entity_count {
+            Some(entity_count) => entity_count as usize,
+            None => 0,
+        };
+
+        Self {
+            msg_bus,
+            last_matching: vec![],
+            expected_entity_count,
+        }
+    }
+
     fn matching(&mut self, mut features_msg: ImageFeatures) -> Entities {
         let pts = features_msg.pts;
         let features = &mut features_msg.features;

@@ -1,19 +1,20 @@
-use crate::core::{
-    message_bus::Client, CommandLineArguments, Component, ImageFeature, ImageFeatures, Message,
-    Point, SkeletonEdge, SkeletonNode,
-};
 use anyhow::Result;
-use std::sync::Arc;
+use libtracker::{
+    message_bus::Client, Component, ImageFeature, ImageFeatures, Message, Point, SkeletonEdge,
+    SkeletonNode,
+};
 
 pub struct Tracker {
     msg_bus: Client,
 }
 
-impl Component for Tracker {
-    fn new(msg_bus: Client, _: Arc<CommandLineArguments>) -> Self {
+impl Tracker {
+    pub fn new(msg_bus: Client) -> Self {
         Self { msg_bus }
     }
+}
 
+impl Component for Tracker {
     fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe("Image")?;
         loop {

@@ -2,7 +2,7 @@ use super::{
     color::{Palette, ALPHABET},
     texture_image::TextureImage,
 };
-use crate::core::{BufferManager, Entities, ImageData, ImageFeature, ImageFeatures};
+use libtracker::{BufferManager, Entities, ImageData, ImageFeature, ImageFeatures};
 
 pub struct VideoPlane {
     buffer_manager: BufferManager,

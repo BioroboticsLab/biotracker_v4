@@ -1,14 +1,15 @@
-use crate::core::{message_bus, CommandLineArguments};
+use anyhow::Result;
 use clap::Parser;
-use ui::app::BioTrackerUI;
+use components::{Matcher, Sampler, Tracker};
+use libtracker::{component::ComponentRunner, message_bus, CommandLineArguments};
+use ui::BioTrackerUI;
 
 mod components;
-mod core;
 mod ui;
 mod util;
 
 fn main() {
-    let args = std::sync::Arc::new(CommandLineArguments::parse());
+    let args = CommandLineArguments::parse();
 
     if let Some(topic) = &args.inspect_bus {
         let msg_bus = message_bus::Client::new().unwrap();
@@ -18,8 +19,15 @@ fn main() {
         }
         return;
     }
-
-    crate::core::component::run_components(args.clone()).unwrap();
+    let _ = || -> Result<ComponentRunner> {
+        let args_copy = args.clone();
+        let mut component_runner = libtracker::component::ComponentRunner::new().unwrap();
+        component_runner.add_component(|msg_bus| Tracker::new(msg_bus))?;
+        component_runner.add_component(|msg_bus| Matcher::new(msg_bus, args_copy))?;
+        component_runner.add_component(|msg_bus| Sampler::new(msg_bus))?;
+        Ok(component_runner)
+    }()
+    .unwrap();
 
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,

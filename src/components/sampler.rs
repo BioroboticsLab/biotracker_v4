@@ -1,11 +1,9 @@
-use crate::core::{
-    message_bus::Client, BufferManager, CommandLineArguments, Component, ImageData, Message,
-    Seekable, State, Timestamp,
-};
 use anyhow::{anyhow, Result};
 use cv::prelude::*;
 use cv::videoio::VideoCapture;
-use std::sync::Arc;
+use libtracker::{
+    message_bus::Client, BufferManager, Component, ImageData, Message, Seekable, State, Timestamp,
+};
 use std::time::{Duration, Instant};
 
 pub struct Video {
@@ -24,16 +22,6 @@ pub struct Sampler {
 }
 
 impl Component for Sampler {
-    fn new(msg_bus: Client, _: Arc<CommandLineArguments>) -> Self {
-        let buffer_manager = BufferManager::new();
-        Self {
-            msg_bus,
-            buffer_manager,
-            play_state: State::Stop,
-            playback: None,
-        }
-    }
-
     fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe("Command")?;
         self.msg_bus.subscribe("Shutdown")?;
@@ -84,6 +72,16 @@ impl Component for Sampler {
 }
 
 impl Sampler {
+    pub fn new(msg_bus: Client) -> Self {
+        let buffer_manager = BufferManager::new();
+        Self {
+            msg_bus,
+            buffer_manager,
+            play_state: State::Stop,
+            playback: None,
+        }
+    }
+
     fn open(&mut self, path: &str) -> Result<()> {
         let mut video_capture = VideoCapture::from_file(path, 0)?;
         let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u64;
