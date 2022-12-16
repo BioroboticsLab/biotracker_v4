@@ -1,13 +1,9 @@
-use super::video_plane::VideoPlane;
-use libtracker::{
-    message_bus::Client, Action, CommandLineArguments, Message, Seekable, State, Timestamp,
-};
+use super::{side_panel::SidePanel, video_plane::VideoPlane};
+use libtracker::{message_bus::Client, CommandLineArguments, Message, Seekable, State, Timestamp};
 
-struct PersistentState {
-    settings_open: bool,
-    experiment_open: bool,
-    dark_mode: bool,
-    scaling: f32,
+pub struct PersistentState {
+    pub dark_mode: bool,
+    pub scaling: f32,
 }
 
 pub struct BioTrackerUI {
@@ -16,6 +12,7 @@ pub struct BioTrackerUI {
     video_scale: f32,
     play_state: State,
     video_plane: VideoPlane,
+    side_panel: SidePanel,
     seekable: Option<Seekable>,
     current_pts: Timestamp,
 }
@@ -26,8 +23,6 @@ impl BioTrackerUI {
         cc.egui_ctx.set_pixels_per_point(1.5);
 
         let persistent_state = PersistentState {
-            settings_open: false,
-            experiment_open: true,
             dark_mode: false,
             scaling: 1.5,
         };
@@ -49,6 +44,7 @@ impl BioTrackerUI {
             video_scale: 1.0,
             play_state: State::Stop,
             video_plane: VideoPlane::new(),
+            side_panel: SidePanel::new(),
             seekable: None,
             current_pts: Timestamp(0),
         })
@@ -116,16 +112,6 @@ impl eframe::App for BioTrackerUI {
                             frame.close();
                         }
                     });
-                    ui.menu_button("View", |ui| {
-                        if ui.button("Settings").clicked() {
-                            self.persistent_state.settings_open = true;
-                            ui.close_menu();
-                        }
-                        if ui.button("Experiment").clicked() {
-                            self.persistent_state.experiment_open = true;
-                            ui.close_menu();
-                        }
-                    });
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         egui::warn_if_debug_build(ui);
                     });
@@ -169,46 +155,19 @@ impl eframe::App for BioTrackerUI {
                 });
             });
 
+            self.side_panel.show(
+                ctx,
+                &mut self.msg_bus,
+                &mut self.persistent_state,
+                &mut self.video_plane,
+            );
+
             egui::CentralPanel::default().show(ctx, |ui| {
                 egui::ScrollArea::both()
                     .max_width(f32::INFINITY)
                     .max_height(f32::INFINITY)
                     .show(ui, |ui| {
                         self.video_plane.show(ui, self.video_scale);
-                    });
-                egui::Window::new("Settings")
-                    .open(&mut self.persistent_state.settings_open)
-                    .resizable(false)
-                    .show(ctx, |ui| {
-                        ui.checkbox(&mut self.persistent_state.dark_mode, "Dark Mode");
-                        match self.persistent_state.dark_mode {
-                            true => ctx.set_visuals(egui::Visuals::dark()),
-                            false => ctx.set_visuals(egui::Visuals::light()),
-                        }
-                        let response = ui.add(egui::Slider::new(
-                            &mut self.persistent_state.scaling,
-                            0.5..=3.0,
-                        ));
-                        if response.drag_released() || response.lost_focus() {
-                            ctx.set_pixels_per_point(self.persistent_state.scaling);
-                        }
-                        ui.separator();
-                        self.video_plane.show_settings(ui);
-                    });
-                egui::Window::new("Experiment")
-                    .open(&mut self.persistent_state.experiment_open)
-                    .resizable(false)
-                    .show(ctx, |ui| {
-                        if ui.button("Add Entity").clicked() {
-                            self.msg_bus
-                                .send(Message::UserAction(Action::AddEntity))
-                                .unwrap();
-                        }
-                        if ui.button("Remove Entity").clicked() {
-                            self.msg_bus
-                                .send(Message::UserAction(Action::RemoveEntity))
-                                .unwrap();
-                        }
                     });
             });
         }
