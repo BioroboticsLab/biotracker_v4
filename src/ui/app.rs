@@ -97,7 +97,7 @@ impl eframe::App for BioTrackerUI {
                 Message::Entities(entities) => {
                     self.video_plane.update_entities(entities);
                 }
-                _ => panic!("Unexpected message"),
+                _ => eprintln!("Unexpected message {:?}", msg),
             }
         }
 

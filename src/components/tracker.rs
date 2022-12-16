@@ -53,7 +53,7 @@ impl Component for Tracker {
                         }
                         self.msg_bus.send(Message::Features(features))?;
                     }
-                    _ => panic!("Unexpected message"),
+                    _ => eprintln!("Unexpected message"),
                 }
             }
         }

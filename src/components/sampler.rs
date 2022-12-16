@@ -86,7 +86,7 @@ impl Component for Sampler {
                                 break;
                             }
                         }
-                        _ => panic!("Unexpected message {:?}", msg),
+                        _ => eprintln!("Unexpected message {:?}", msg),
                     },
                     None => {}
                 }

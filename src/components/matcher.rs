@@ -40,7 +40,7 @@ impl Component for Matcher {
                             }
                         }
                     },
-                    _ => panic!("Unexpected message"),
+                    _ => eprintln!("Unexpected message {:?}", msg),
                 }
             }
         }
