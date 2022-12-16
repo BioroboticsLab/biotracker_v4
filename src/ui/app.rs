@@ -1,5 +1,7 @@
 use super::{side_panel::SidePanel, video_plane::VideoPlane};
-use libtracker::{message_bus::Client, CommandLineArguments, Message, Seekable, State, Timestamp};
+use libtracker::{
+    message_bus::Client, CommandLineArguments, ImageData, Message, Seekable, State, Timestamp,
+};
 
 pub struct PersistentState {
     pub dark_mode: bool,
@@ -69,13 +71,12 @@ impl eframe::App for BioTrackerUI {
         if zoom_delta != 1.0 {
             self.video_scale = 0.1f32.max(self.video_scale * zoom_delta);
         }
+        //let mut last_image: Option<ImageData> = None;
+        let mut last_image = None;
         while let Ok(Some(msg)) = self.msg_bus.poll(0) {
             match msg {
                 Message::Image(img) => {
-                    let render_state = frame.wgpu_render_state().unwrap();
-                    self.current_pts = img.pts;
-                    self.video_plane.update_texture(render_state, &img);
-                    break;
+                    last_image = Some(img);
                 }
                 Message::Seekable(seekable) => {
                     self.seekable = Some(seekable);
@@ -98,6 +99,15 @@ impl eframe::App for BioTrackerUI {
                 }
                 _ => panic!("Unexpected message"),
             }
+        }
+
+        // we defer actually reading the image until after the message queue is drained. This way,
+        // we always skip to the newest frame. This happens, when the application does not render,
+        // because it is minimised.
+        if let Some(img) = last_image {
+            let render_state = frame.wgpu_render_state().unwrap();
+            self.current_pts = img.pts;
+            self.video_plane.update_texture(render_state, &img);
         }
 
         {
