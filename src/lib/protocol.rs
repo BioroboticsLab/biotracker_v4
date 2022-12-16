@@ -4,6 +4,7 @@ use derive_more::{Add, Div, Mul, Sub};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "type")]
 pub enum Message {
     /// Settings
     ComponentSettings(ComponentSettings),
@@ -33,8 +34,8 @@ pub enum Action {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Point {
-    pub x: f32,
-    pub y: f32,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -69,13 +70,10 @@ pub struct ImageFeatures {
     pub features: Vec<ImageFeature>,
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct EntityID(pub u128);
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entities {
     pub pts: Timestamp,
-    pub entities: HashMap<EntityID, ImageFeature>,
+    pub entities: HashMap<String, ImageFeature>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

@@ -14,15 +14,19 @@ fn main() {
     if let Some(topic) = &args.inspect_bus {
         let msg_bus = message_bus::Client::new().unwrap();
         msg_bus.subscribe(topic).unwrap();
-        while let Ok(Some(msg)) = msg_bus.poll(-1) {
-            eprintln!("{:?}", msg);
+        loop {
+            let msg_result = msg_bus.poll(-1);
+            match msg_result {
+                Ok(Some(msg)) => eprintln!("{:?}", msg),
+                Ok(None) => {}
+                Err(e) => eprintln!("Error: {}", e),
+            }
         }
-        return;
     }
     let _ = || -> Result<ComponentRunner> {
         let args_copy = args.clone();
         let mut component_runner = libtracker::component::ComponentRunner::new().unwrap();
-        component_runner.add_component(|msg_bus| Tracker::new(msg_bus))?;
+        //component_runner.add_component(|msg_bus| Tracker::new(msg_bus))?;
         component_runner.add_component(|msg_bus| Matcher::new(msg_bus, args_copy))?;
         component_runner.add_component(|msg_bus| Sampler::new(msg_bus))?;
         Ok(component_runner)

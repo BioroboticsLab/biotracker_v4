@@ -1,10 +1,16 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
+
 pub struct Palette {
     pub colors: &'static [[u8; 3]],
 }
 
 impl Palette {
-    pub fn pick(&self, n: u128) -> egui::Color32 {
-        let color_idx = (n % (self.colors.len() as u128)) as usize;
+    pub fn pick(&self, id: &str) -> egui::Color32 {
+        let mut hasher = DefaultHasher::new();
+        hasher.write(id.as_bytes());
+        let hash = hasher.finish();
+        let color_idx = (hash % (self.colors.len() as u64)) as usize;
         let color = self.colors[color_idx];
         egui::Color32::from_rgb(color[0], color[1], color[2])
     }

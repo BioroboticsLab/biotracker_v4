@@ -65,12 +65,22 @@ impl VideoPlane {
         for edge in edges {
             let point_from = &nodes[edge.from].point;
             let point_to = &nodes[edge.to].point;
-            let from = to_screen * egui::pos2(point_from.x, point_from.y);
-            let to = to_screen * egui::pos2(point_to.x, point_to.y);
+            if point_from.x.is_none()
+                || point_from.y.is_none()
+                || point_to.x.is_none()
+                || point_to.y.is_none()
+            {
+                continue;
+            }
+            let from = to_screen * egui::pos2(point_from.x.unwrap(), point_from.y.unwrap());
+            let to = to_screen * egui::pos2(point_to.x.unwrap(), point_to.y.unwrap());
             painter.line_segment([from, to], egui::Stroke::new(2.0, egui::Color32::BLACK));
         }
         for node in nodes {
-            let point = to_screen * egui::pos2(node.point.x, node.point.y);
+            if node.point.x.is_none() || node.point.y.is_none() {
+                continue;
+            }
+            let point = to_screen * egui::pos2(node.point.x.unwrap(), node.point.y.unwrap());
             painter.circle(
                 point,
                 5.0,
@@ -116,7 +126,7 @@ impl VideoPlane {
             if let Some(entities) = &self.last_entities {
                 if self.draw_entities {
                     for (uuid, feature) in &entities.entities {
-                        let color = self.color_palette.pick(uuid.0);
+                        let color = self.color_palette.pick(&uuid);
                         self.paint_feature(&painter, &to_screen, feature, color);
                     }
                 }

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use libtracker::{
-    message_bus::Client, Action, CommandLineArguments, Component, Entities, EntityID, ImageFeature,
+    message_bus::Client, Action, CommandLineArguments, Component, Entities, ImageFeature,
     ImageFeatures, Message, Timestamp,
 };
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
@@ -8,7 +8,7 @@ use rand::Rng;
 use std::collections::HashMap;
 
 struct MatchedEntity {
-    id: EntityID,
+    id: String,
     feature: ImageFeature,
     last_seen: Timestamp,
 }
@@ -95,11 +95,13 @@ impl Matcher {
                     for node_idx in 0..feature.nodes.len() {
                         let p1 = &feature.nodes[node_idx].point;
                         let p2 = &last_feature.nodes[node_idx].point;
-                        if p1.x.is_nan() || p1.y.is_nan() || p2.x.is_nan() || p2.y.is_nan() {
+                        if p1.x.is_none() || p1.y.is_none() || p2.x.is_none() || p2.y.is_none() {
                             continue;
                         }
+                        let p1 = (p1.x.unwrap(), p1.y.unwrap());
+                        let p2 = (p2.x.unwrap(), p2.y.unwrap());
                         node_cnt += 1;
-                        let distance = (p1.x - p2.x).powi(2) + (p1.y - p2.y).powi(2);
+                        let distance = (p1.0 - p2.0).powi(2) + (p1.1 - p2.0).powi(2);
                         node_squared_distance_sum += distance as i64;
                     }
                     node_squared_distance_sum / node_cnt
@@ -114,9 +116,9 @@ impl Matcher {
             }
             let feature = features[feature_idx].clone();
             if *last_feature_idx >= self.last_matching.len() {
-                let id: u128 = rand::thread_rng().gen();
+                let id: u64 = rand::thread_rng().gen();
                 self.last_matching.push(MatchedEntity {
-                    id: EntityID(id),
+                    id: id.to_string(),
                     feature,
                     last_seen: pts,
                 });
