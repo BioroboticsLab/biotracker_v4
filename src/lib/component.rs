@@ -33,7 +33,13 @@ impl ComponentRunner {
             .name(thread_name.to_string())
             .spawn(move || -> Result<()> {
                 let mut component = component_builder(msg_bus);
-                component.run()
+                match component.run() {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        eprintln!("Error in {}: {}", thread_name, e);
+                        Err(e)
+                    }
+                }
             })?;
         self.threads.push(thread_handle);
         Ok(())

@@ -16,9 +16,12 @@ predictor.inference_model.predict(np.zeros((1, 2048, 2048, 1), dtype = "uint8"))
 
 message_bus = MessageBus()
 message_bus.subscribe("Image")
+message_bus.subscribe("Shutdown")
 while True:
     msg = message_bus.poll(-1)
     try:
+        if msg.type == "Shutdown":
+            break
         if msg.type == "Image":
             img = SharedImage(msg)
             buf = img.as_numpy()

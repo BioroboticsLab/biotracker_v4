@@ -1,5 +1,6 @@
+use std::path::PathBuf;
+
 use clap::Parser;
-//use std::sync::Arc;
 
 /// Modular framework for animal tracking
 #[derive(Parser, Debug, Clone)]
@@ -10,6 +11,10 @@ pub struct CommandLineArguments {
     pub video: Option<String>,
     #[arg(short, long)]
     pub inspect_bus: Option<String>,
-    #[arg(short, long)]
+    #[arg(long)]
     pub entity_count: Option<u64>,
+    #[arg(long, requires = "tracker_cmd_path")]
+    pub tracker_venv_path: Option<PathBuf>,
+    #[arg(long, requires = "tracker_venv_path")]
+    pub tracker_cmd_path: Option<PathBuf>,
 }

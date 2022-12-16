@@ -45,5 +45,8 @@ class Entities(BaseModel):
     pts: int
     entities: dict[int, ImageFeature]
 
+class Shutdown(BaseModel):
+    type: Literal['Shutdown']
+
 class Message(BaseModel):
-    msg: Union[ImageFeatures, ImageData, Entities] = Field(..., discriminator='type')
+    msg: Union[ImageFeatures, ImageData, Entities, Shutdown] = Field(..., discriminator='type')

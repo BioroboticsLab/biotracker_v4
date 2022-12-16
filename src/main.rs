@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use components::{Matcher, Sampler, Tracker};
+use components::{Matcher, PythonRunner, Sampler};
 use libtracker::{component::ComponentRunner, message_bus, CommandLineArguments};
 use ui::BioTrackerUI;
 
@@ -23,11 +23,25 @@ fn main() {
             }
         }
     }
+
     let _ = || -> Result<ComponentRunner> {
-        let args_copy = args.clone();
+        let args = args.clone();
         let mut component_runner = libtracker::component::ComponentRunner::new().unwrap();
-        //component_runner.add_component(|msg_bus| Tracker::new(msg_bus))?;
-        component_runner.add_component(|msg_bus| Matcher::new(msg_bus, args_copy))?;
+        if let Some((venv, cmd)) = args
+            .tracker_venv_path
+            .as_ref()
+            .zip(args.tracker_cmd_path.as_ref())
+        {
+            let (venv, cmd) = (venv.clone(), cmd.clone());
+            component_runner.add_component(|_| PythonRunner::new(venv, cmd))?;
+        }
+        if args.tracker_venv_path.is_some() && args.tracker_cmd_path.is_some() {
+            let venv_path = args.tracker_venv_path.clone();
+            let cmd_path = args.tracker_cmd_path.clone();
+            component_runner
+                .add_component(|_| PythonRunner::new(venv_path.unwrap(), cmd_path.unwrap()))?;
+        }
+        component_runner.add_component(|msg_bus| Matcher::new(msg_bus, args))?;
         component_runner.add_component(|msg_bus| Sampler::new(msg_bus))?;
         Ok(component_runner)
     }()
