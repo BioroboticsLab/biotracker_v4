@@ -2,10 +2,10 @@ use super::{
     color::{Palette, ALPHABET},
     texture_image::TextureImage,
 };
-use libtracker::{BufferManager, Entities, ImageData, ImageFeature, ImageFeatures};
+use libtracker::{Entities, ImageData, ImageFeature, ImageFeatures, SharedBuffer};
 
 pub struct VideoPlane {
-    buffer_manager: BufferManager,
+    image_buffer: Option<SharedBuffer>,
     texture_image: Option<TextureImage>,
     last_features: Option<ImageFeatures>,
     last_entities: Option<Entities>,
@@ -17,7 +17,7 @@ pub struct VideoPlane {
 impl VideoPlane {
     pub fn new() -> Self {
         Self {
-            buffer_manager: BufferManager::new(),
+            image_buffer: None,
             texture_image: None,
             last_features: None,
             last_entities: None,
@@ -28,7 +28,7 @@ impl VideoPlane {
     }
 
     pub fn update_texture(&mut self, render_state: &egui_wgpu::RenderState, img: &ImageData) {
-        let image_buffer = self.buffer_manager.get(&img.shm_id).unwrap();
+        let image_buffer = SharedBuffer::open(&img.shm_id).unwrap();
         if self.texture_image.is_none() {
             self.texture_image = Some(TextureImage::new(&render_state, img.width, img.height));
         }
@@ -43,6 +43,7 @@ impl VideoPlane {
                 )
             }
         }
+        self.image_buffer = Some(image_buffer);
     }
 
     pub fn update_features(&mut self, features: ImageFeatures) {

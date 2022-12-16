@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Message {
+    /// Settings
+    ComponentSettings(ComponentSettings),
     /// Playback messages
     UserAction(Action),
     Command(State),
@@ -15,6 +17,12 @@ pub enum Message {
     Image(ImageData),
     Features(ImageFeatures),
     Entities(Entities),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ComponentSettings {
+    pub id: String,
+    pub json: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

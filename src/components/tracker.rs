@@ -31,15 +31,15 @@ impl Component for Tracker {
                         let r = img.width as f32 / 4.0;
                         for i in 0..6 {
                             let step = (pts.0 as f64 / 1000000000.0) as f32 + i as f32;
-                            let x = center_x + (step.sin() * r);
-                            let y = center_y + (step.cos() * r);
+                            let x = Some(center_x + (step.sin() * r));
+                            let y = Some(center_y + (step.cos() * r));
                             let head = SkeletonNode {
                                 point: Point { x, y },
                                 score: 1.0,
                             };
                             let step2 = (pts.0 as f64 / 1000000000.0) as f32 + i as f32 - 0.1;
-                            let x2 = center_x + (step2.sin() * r);
-                            let y2 = center_y + (step2.cos() * r);
+                            let x2 = Some(center_x + (step2.sin() * r));
+                            let y2 = Some(center_y + (step2.cos() * r));
                             let tail = SkeletonNode {
                                 point: Point { x: x2, y: y2 },
                                 score: 1.0,

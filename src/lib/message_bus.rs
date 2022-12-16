@@ -62,6 +62,7 @@ fn to_topic(msg: &BioTrackerMessage) -> &str {
         BioTrackerMessage::Features(_) => "Feature",
         BioTrackerMessage::Entities(_) => "Entities",
         BioTrackerMessage::UserAction(_) => "UserAction",
+        BioTrackerMessage::ComponentSettings(_) => "ComponentSettings",
     };
     topic
 }
@@ -89,8 +90,12 @@ impl Client {
             assert!(self.sub.get_rcvmore()?);
             self.sub.recv(&mut msg, 0)?;
             if let Some(msg_str) = msg.as_str() {
-                let deserialized: BioTrackerMessage = serde_json::from_str(msg_str)?;
-                return Ok(Some(deserialized));
+                return match serde_json::from_str(msg_str) {
+                    Ok(deserialized) => Ok(Some(deserialized)),
+                    Err(e) => Err(anyhow!(
+                        "Failed to Deserialize message: {msg_str}, error {e}"
+                    )),
+                };
             } else {
                 return Err(anyhow!("Failed to get message string"));
             }

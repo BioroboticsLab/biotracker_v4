@@ -7,4 +7,4 @@ pub mod shared_buffer;
 pub use cli::CommandLineArguments;
 pub use component::Component;
 pub use protocol::*;
-pub use shared_buffer::{BufferManager, SharedBuffer};
+pub use shared_buffer::{BufferHistory, SharedBuffer};
