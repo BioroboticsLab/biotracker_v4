@@ -14,7 +14,9 @@ pub struct CommandLineArguments {
     #[arg(long)]
     pub entity_count: Option<u64>,
     #[arg(long, requires = "tracker_cmd_path")]
-    pub tracker_venv_path: Option<PathBuf>,
+    pub tracker_venv: Option<PathBuf>,
     #[arg(long, requires = "tracker_venv_path")]
-    pub tracker_cmd_path: Option<PathBuf>,
+    pub tracker_cmd: Option<PathBuf>,
+    #[arg(long)]
+    pub save_video: Option<PathBuf>,
 }

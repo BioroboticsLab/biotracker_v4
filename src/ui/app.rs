@@ -1,7 +1,5 @@
 use super::{side_panel::SidePanel, video_plane::VideoPlane};
-use libtracker::{
-    message_bus::Client, CommandLineArguments, ImageData, Message, Seekable, State, Timestamp,
-};
+use libtracker::{message_bus::Client, CommandLineArguments, Message, Seekable, State, Timestamp};
 
 pub struct PersistentState {
     pub dark_mode: bool,
