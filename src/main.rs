@@ -75,5 +75,6 @@ fn main() {
         "BioTracker",
         options,
         Box::new(|cc| Box::new(BioTrackerUI::new(cc, args).unwrap())),
-    );
+    )
+    .unwrap();
 }

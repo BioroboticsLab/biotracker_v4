@@ -1,5 +1,11 @@
-use super::{side_panel::SidePanel, video_plane::VideoPlane};
-use libtracker::{message_bus::Client, CommandLineArguments, Message, Seekable, State, Timestamp};
+use super::{
+    offscreen_renderer::OffscreenRenderer, side_panel::SidePanel, texture::Texture,
+    video_plane::VideoPlane,
+};
+use egui_wgpu::wgpu;
+use libtracker::{
+    message_bus::Client, CommandLineArguments, Message, Seekable, SharedBuffer, State, Timestamp,
+};
 
 pub struct PersistentState {
     pub dark_mode: bool,
@@ -15,6 +21,12 @@ pub struct BioTrackerUI {
     side_panel: SidePanel,
     seekable: Option<Seekable>,
     current_pts: Timestamp,
+    seek_pts: Timestamp,
+    offscreen_renderer: OffscreenRenderer,
+    texture: Option<Texture>,
+    onscreen_id: egui::TextureId,
+    offscreen_id: egui::TextureId,
+    entities_received: bool,
 }
 
 impl BioTrackerUI {
@@ -38,6 +50,14 @@ impl BioTrackerUI {
                 .send(Message::Command(State::Open(path.to_owned())))
                 .unwrap();
         }
+
+        let render_state = cc
+            .wgpu_render_state
+            .as_ref()
+            .expect("WGPU render state not available");
+        let offscreen_renderer =
+            OffscreenRenderer::new(render_state.device.clone(), render_state.queue.clone());
+
         Some(Self {
             persistent_state,
             msg_bus,
@@ -47,6 +67,12 @@ impl BioTrackerUI {
             side_panel: SidePanel::new(),
             seekable: None,
             current_pts: Timestamp(0),
+            seek_pts: Timestamp(0),
+            offscreen_renderer,
+            texture: None,
+            onscreen_id: egui::epaint::TextureId::default(),
+            offscreen_id: egui::epaint::TextureId::default(),
+            entities_received: false,
         })
     }
 
@@ -69,7 +95,6 @@ impl eframe::App for BioTrackerUI {
         if zoom_delta != 1.0 {
             self.video_scale = 0.1f32.max(self.video_scale * zoom_delta);
         }
-        //let mut last_image: Option<ImageData> = None;
         let mut last_image = None;
         while let Ok(Some(msg)) = self.msg_bus.poll(0) {
             match msg {
@@ -93,6 +118,7 @@ impl eframe::App for BioTrackerUI {
                     self.video_plane.update_features(features);
                 }
                 Message::Entities(entities) => {
+                    self.entities_received = true;
                     self.video_plane.update_entities(entities);
                 }
                 _ => eprintln!("Unexpected message {:?}", msg),
@@ -103,9 +129,45 @@ impl eframe::App for BioTrackerUI {
         // we always skip to the newest frame. This happens, when the application does not render,
         // because it is minimised.
         if let Some(img) = last_image {
-            let render_state = frame.wgpu_render_state().unwrap();
             self.current_pts = img.pts;
-            self.video_plane.update_texture(render_state, &img);
+            let render_state = frame.wgpu_render_state().unwrap();
+            let image_buffer = SharedBuffer::open(&img.shm_id).unwrap();
+
+            let mut reinitialize_texture = self.texture.is_none();
+            if let Some(texture) = &mut self.texture {
+                if texture.size.width != img.width || texture.size.height != img.height {
+                    reinitialize_texture = true;
+                }
+            }
+
+            if reinitialize_texture {
+                let texture = Texture::new(
+                    &render_state.device,
+                    img.width,
+                    img.height,
+                    wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                    Some("egui_video_texture"),
+                );
+                self.onscreen_id =
+                    texture.egui_register(&render_state.device, &render_state.renderer);
+                self.offscreen_id = texture.egui_register(
+                    &render_state.device,
+                    &self.offscreen_renderer.render_state.renderer,
+                );
+                self.texture = Some(texture);
+            }
+
+            unsafe {
+                self.texture
+                    .as_mut()
+                    .expect("Texture not initialized")
+                    .update(
+                        &render_state.queue,
+                        img.width,
+                        img.height,
+                        image_buffer.as_slice(),
+                    )
+            }
         }
 
         {
@@ -146,12 +208,12 @@ impl eframe::App for BioTrackerUI {
                         ui.label(&self.current_pts.to_string());
                         ui.spacing_mut().slider_width = slider_size.x;
                         let response = ui.add(
-                            egui::Slider::new(&mut self.current_pts.0, 0..=seekable.end.0)
+                            egui::Slider::new(&mut self.seek_pts.0, 0..=seekable.end.0)
                                 .show_value(false),
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
                             self.msg_bus
-                                .send(Message::Command(State::Seek(self.current_pts)))
+                                .send(Message::Command(State::Seek(self.seek_pts)))
                                 .unwrap();
                         }
                         ui.label(&seekable.end.to_string());
@@ -175,11 +237,34 @@ impl eframe::App for BioTrackerUI {
                     .max_width(f32::INFINITY)
                     .max_height(f32::INFINITY)
                     .show(ui, |ui| {
-                        self.video_plane.show(ui, self.video_scale);
+                        self.video_plane.show(
+                            ui,
+                            Some(self.video_scale),
+                            &self.texture,
+                            self.onscreen_id,
+                        );
                     });
             });
+
+            if self.entities_received {
+                self.offscreen_renderer.render(|offscreen_ctx| {
+                    egui::CentralPanel::default().show(offscreen_ctx, |ui| {
+                        self.video_plane
+                            .show(ui, None, &self.texture, self.offscreen_id);
+                    });
+                });
+            }
+            ctx.request_repaint();
         }
-        ctx.request_repaint();
+    }
+
+    fn post_rendering(&mut self, _window_size_px: [u32; 2], _frame: &eframe::Frame) {
+        if self.entities_received {
+            self.offscreen_renderer
+                .post_rendering(&self.msg_bus, &self.current_pts)
+                .unwrap();
+            self.entities_received = false;
+        }
     }
 
     fn on_exit(&mut self) {

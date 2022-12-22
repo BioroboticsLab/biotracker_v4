@@ -25,11 +25,11 @@ pub struct VideoEncoder {
 impl Component for VideoEncoder {
     /// Get images from the message bus and encode them into a video.
     fn run(&mut self) -> Result<()> {
-        self.msg_bus.subscribe("Image")?;
+        self.msg_bus.subscribe("AnnotatedImage")?;
         self.msg_bus.subscribe("Shutdown")?;
         loop {
             match self.msg_bus.poll(-1)?.unwrap() {
-                Message::Image(img) => {
+                Message::AnnotatedImage(img) => {
                     if let Some(encode) = &mut self.encode {
                         let image_buffer = SharedBuffer::open(&img.shm_id)?;
                         let cv_img = unsafe {
@@ -51,10 +51,6 @@ impl Component for VideoEncoder {
                         )?;
                         encode.writer.write(&img_bgr)?;
                         encode.frame_number += 1;
-                        if encode.frame_number == 10 {
-                            self.finish()?;
-                            break;
-                        }
                     }
                 }
                 Message::Shutdown => {

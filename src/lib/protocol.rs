@@ -16,6 +16,7 @@ pub enum Message {
     Shutdown,
     /// Sample messages
     Image(ImageData),
+    AnnotatedImage(ImageData),
     Features(ImageFeatures),
     Entities(Entities),
 }
