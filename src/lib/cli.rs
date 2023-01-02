@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-/// Modular framework for animal tracking
+/// Distributed framework for animal tracking
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct CommandLineArguments {

@@ -1,8 +1,6 @@
-from .protocol import Message
 from multiprocessing.shared_memory import SharedMemory, resource_tracker
 import numpy as np
 import zmq
-import json
 
 class MessageBus:
     def __init__(self):
@@ -19,9 +17,7 @@ class MessageBus:
         if self.sub.poll(timeout) <= 0:
             return None
         msg = self.sub.recv_multipart()
-        msg = json.loads(msg[1])
-        return Message(msg=msg).msg
+        return (msg[0].decode(), msg[1])
 
-    def send(self, msg):
-        ty = msg.type
-        self.push.send_multipart([ty.encode(), msg.json().encode()])
+    def send(self, ty, msg):
+        self.push.send_multipart([ty.encode(), msg.SerializeToString()])

@@ -3,7 +3,7 @@ use anyhow::Result;
 use core::num::NonZeroU32;
 use egui::mutex::RwLock;
 use egui_wgpu::wgpu;
-use libtracker::{message_bus::Client, BufferHistory, ImageData, Message, SharedBuffer, Timestamp};
+use libtracker::{message_bus::Client, protocol::*, DoubleBuffer, SharedBuffer};
 use std::sync::Arc;
 
 pub struct OffscreenRenderer {
@@ -11,7 +11,7 @@ pub struct OffscreenRenderer {
     context: egui::Context,
     texture: Texture,
     copy_buffer: Option<wgpu::Buffer>,
-    image_history: BufferHistory,
+    image_history: DoubleBuffer,
 }
 
 const WIDTH: u32 = 2048;
@@ -45,7 +45,7 @@ impl OffscreenRenderer {
             },
             texture,
             copy_buffer: None,
-            image_history: BufferHistory::new(),
+            image_history: DoubleBuffer::new(),
         }
     }
 
@@ -140,7 +140,7 @@ impl OffscreenRenderer {
             .submit(user_cmd_bufs.into_iter().chain(std::iter::once(encoded)));
     }
 
-    pub fn post_rendering(&mut self, msg_bus: &Client, pts: &Timestamp) -> Result<()> {
+    pub fn post_rendering(&mut self, msg_bus: &Client, timestamp: u64) -> Result<()> {
         if let Some(copy_buffer) = self.copy_buffer.take() {
             let mut shared_buffer = SharedBuffer::new((WIDTH * HEIGTH * 4) as usize)?;
             let buffer_slice = copy_buffer.slice(..);
@@ -157,14 +157,15 @@ impl OffscreenRenderer {
                     .as_slice_mut()
                     .copy_from_slice(&(*buffer_view));
             }
-            let image_data = ImageData {
+            let image = Image {
+                stream_id: "Annotated".to_string(),
                 shm_id: shared_buffer.id().to_owned(),
                 width: self.texture.size.width,
                 height: self.texture.size.height,
-                pts: pts.clone(),
+                timestamp,
             };
             self.image_history.push(shared_buffer);
-            msg_bus.send(Message::AnnotatedImage(image_data)).unwrap();
+            msg_bus.send(Message::Image(image)).unwrap();
         }
         Ok(())
     }

@@ -1,78 +1,66 @@
-use anyhow::Result;
-use libtracker::{
-    message_bus::Client, Action, CommandLineArguments, Component, Entities, ImageFeature,
-    ImageFeatures, Message, Timestamp,
-};
+use anyhow::{anyhow, Result};
+use libtracker::{message_bus::Client, protocol::*, CommandLineArguments, Component};
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
 use rand::Rng;
 use std::collections::HashMap;
+use std::sync::Arc;
 
+#[derive(Debug)]
 struct MatchedEntity {
     id: String,
-    feature: ImageFeature,
-    last_seen: Timestamp,
+    feature: Feature,
+    last_seen: u64,
 }
 
 pub struct Matcher {
     msg_bus: Client,
     last_matching: Vec<MatchedEntity>,
-    expected_entity_count: usize,
+    experiment: ExperimentState,
 }
 
 impl Component for Matcher {
+    fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+        Self {
+            msg_bus,
+            last_matching: vec![],
+            experiment: ExperimentState::default(),
+        }
+    }
+
     fn run(&mut self) -> Result<()> {
-        self.msg_bus.subscribe("Feature")?;
-        self.msg_bus.subscribe("UserAction")?;
-        loop {
-            if let Ok(Some(msg)) = self.msg_bus.poll(-1) {
-                match msg {
-                    Message::Features(features_msg) => {
-                        if !features_msg.features.is_empty() {
-                            let entities = self.matching(features_msg);
-                            self.msg_bus.send(Message::Entities(entities))?;
-                        }
+        self.msg_bus
+            .subscribe(&[MessageType::Features, MessageType::ExperimentState])?;
+        while let Some(message) = self.msg_bus.poll(-1)? {
+            match message {
+                Message::Features(mut features_msg) => {
+                    if !features_msg.features.is_empty() {
+                        let entities = self.matching(&mut features_msg);
+                        self.msg_bus.send(Message::Entities(entities))?;
                     }
-                    Message::UserAction(action) => match action {
-                        Action::AddEntity => self.expected_entity_count += 1,
-                        Action::RemoveEntity => {
-                            if self.expected_entity_count > 0 {
-                                self.expected_entity_count -= 1;
-                            }
-                        }
-                    },
-                    _ => eprintln!("Unexpected message {:?}", msg),
                 }
+                Message::ExperimentState(experiment_state) => {
+                    self.experiment = experiment_state;
+                }
+                _ => return Err(anyhow!("Unexpected message {:?}", message)),
             }
         }
+        Ok(())
     }
 }
 
 impl Matcher {
-    pub fn new(msg_bus: Client, args: CommandLineArguments) -> Self {
-        let expected_entity_count = match args.entity_count {
-            Some(entity_count) => entity_count as usize,
-            None => 0,
-        };
-
-        Self {
-            msg_bus,
-            last_matching: vec![],
-            expected_entity_count,
-        }
-    }
-
-    fn matching(&mut self, mut features_msg: ImageFeatures) -> Entities {
-        let pts = features_msg.pts;
+    fn matching(&mut self, features_msg: &mut Features) -> Entities {
+        let timestamp = features_msg.timestamp;
         let features = &mut features_msg.features;
         // Remove lowest scoring features, if there is more then we expect
-        if features.len() > self.expected_entity_count {
+        if features.len() > self.experiment.entity_count as usize {
             // sort by score in descending order
             features.sort_by(|a, b| {
                 b.score
                     .partial_cmp(&a.score)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
-            while features.len() > self.expected_entity_count {
+            while features.len() > self.experiment.entity_count as usize {
                 features.pop();
             }
         }
@@ -93,15 +81,15 @@ impl Matcher {
                     let feature = &features[feature_idx];
                     let last_feature = &self.last_matching[last_feature_idx].feature;
                     for node_idx in 0..feature.nodes.len() {
-                        let p1 = &feature.nodes[node_idx].point;
-                        let p2 = &last_feature.nodes[node_idx].point;
-                        if p1.x.is_none() || p1.y.is_none() || p2.x.is_none() || p2.y.is_none() {
+                        let x1 = feature.nodes[node_idx].x;
+                        let y1 = feature.nodes[node_idx].y;
+                        let x2 = last_feature.nodes[node_idx].x;
+                        let y2 = last_feature.nodes[node_idx].y;
+                        if x1.is_nan() || y1.is_nan() || x2.is_nan() || y2.is_nan() {
                             continue;
                         }
-                        let p1 = (p1.x.unwrap(), p1.y.unwrap());
-                        let p2 = (p2.x.unwrap(), p2.y.unwrap());
                         node_cnt += 1;
-                        let distance = (p1.0 - p2.0).powi(2) + (p1.1 - p2.0).powi(2);
+                        let distance = (x1 - x2).powi(2) + (y1 - y2).powi(2);
                         node_squared_distance_sum += distance as i64;
                     }
                     node_squared_distance_sum / node_cnt
@@ -120,23 +108,23 @@ impl Matcher {
                 self.last_matching.push(MatchedEntity {
                     id: id.to_string(),
                     feature,
-                    last_seen: pts,
+                    last_seen: timestamp,
                 });
             } else {
                 self.last_matching[*last_feature_idx].feature = feature;
-                self.last_matching[*last_feature_idx].last_seen = pts;
+                self.last_matching[*last_feature_idx].last_seen = timestamp;
             }
         }
 
         let mut entities_map = HashMap::new();
         for matched_entity in &self.last_matching {
-            if matched_entity.last_seen == pts {
+            if matched_entity.last_seen == timestamp {
                 entities_map.insert(matched_entity.id.clone(), matched_entity.feature.clone());
             }
         }
 
         Entities {
-            pts,
+            timestamp,
             entities: entities_map,
         }
     }

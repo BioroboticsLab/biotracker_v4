@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package biotracker.video;
+
+enum VideoState {
+  PLAYING = 0;
+  PAUSED = 1;
+  STOPPED = 2;
+  EOS = 3;
+}
+
+message VideoDecoderState {
+  string path = 1;
+  double fps = 2;
+  uint32 frame_count = 3;
+  uint32 frame_number = 5;
+  VideoState state = 6;
+}
+
+message VideoDecoderCommand {
+  optional string path = 1;
+  optional double fps = 2;
+  optional uint32 frame_number = 3;
+  optional VideoState state = 4;
+}

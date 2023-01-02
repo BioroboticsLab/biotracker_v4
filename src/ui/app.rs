@@ -3,9 +3,7 @@ use super::{
     video_plane::VideoPlane,
 };
 use egui_wgpu::wgpu;
-use libtracker::{
-    message_bus::Client, CommandLineArguments, Message, Seekable, SharedBuffer, State, Timestamp,
-};
+use libtracker::{message_bus::Client, protocol::*, CommandLineArguments, SharedBuffer};
 
 pub struct PersistentState {
     pub dark_mode: bool,
@@ -16,21 +14,21 @@ pub struct BioTrackerUI {
     persistent_state: PersistentState,
     msg_bus: Client,
     video_scale: f32,
-    play_state: State,
     video_plane: VideoPlane,
     side_panel: SidePanel,
-    seekable: Option<Seekable>,
-    current_pts: Timestamp,
-    seek_pts: Timestamp,
+    current_timestamp: u64,
+    seek_framenumber: u32,
     offscreen_renderer: OffscreenRenderer,
     texture: Option<Texture>,
     onscreen_id: egui::TextureId,
     offscreen_id: egui::TextureId,
     entities_received: bool,
+    decoder_state: Option<VideoDecoderState>,
+    experiment_state: ExperimentState,
 }
 
 impl BioTrackerUI {
-    pub fn new(cc: &eframe::CreationContext, args: CommandLineArguments) -> Option<Self> {
+    pub fn new(cc: &eframe::CreationContext, _args: CommandLineArguments) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
         cc.egui_ctx.set_pixels_per_point(1.5);
 
@@ -40,16 +38,14 @@ impl BioTrackerUI {
         };
 
         let msg_bus = Client::new().unwrap();
-        msg_bus.subscribe("Seekable").unwrap();
-        msg_bus.subscribe("Event").unwrap();
-        msg_bus.subscribe("Image").unwrap();
-        msg_bus.subscribe("Feature").unwrap();
-        msg_bus.subscribe("Entities").unwrap();
-        if let Some(path) = &args.video {
-            msg_bus
-                .send(Message::Command(State::Open(path.to_owned())))
-                .unwrap();
-        }
+        msg_bus
+            .subscribe(&[
+                MessageType::VideoDecoderState,
+                MessageType::Image,
+                MessageType::Features,
+                MessageType::Entities,
+            ])
+            .unwrap();
 
         let render_state = cc
             .wgpu_render_state
@@ -62,26 +58,32 @@ impl BioTrackerUI {
             persistent_state,
             msg_bus,
             video_scale: 1.0,
-            play_state: State::Stop,
             video_plane: VideoPlane::new(),
             side_panel: SidePanel::new(),
-            seekable: None,
-            current_pts: Timestamp(0),
-            seek_pts: Timestamp(0),
+            current_timestamp: 0,
+            seek_framenumber: 0,
             offscreen_renderer,
             texture: None,
             onscreen_id: egui::epaint::TextureId::default(),
             offscreen_id: egui::epaint::TextureId::default(),
             entities_received: false,
+            decoder_state: None,
+            experiment_state: ExperimentState::default(),
         })
     }
 
-    pub fn filemenu(&mut self) {
+    fn open_video(&self, path: String) {
+        let mut cmd = VideoDecoderCommand::default();
+        cmd.path = Some(path);
+        self.msg_bus
+            .send(Message::VideoDecoderCommand(cmd))
+            .unwrap();
+    }
+
+    fn filemenu(&mut self) {
         if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
             if let Some(path_str) = pathbuf.to_str() {
-                self.msg_bus
-                    .send(Message::Command(State::Open(path_str.to_owned())))
-                    .unwrap();
+                self.open_video(path_str.to_owned());
             } else {
                 eprintln!("Failed to get unicode string from pathbuf");
             }
@@ -91,6 +93,7 @@ impl BioTrackerUI {
 
 impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let mut cmd = VideoDecoderCommand::default();
         let zoom_delta = ctx.input().zoom_delta();
         if zoom_delta != 1.0 {
             self.video_scale = 0.1f32.max(self.video_scale * zoom_delta);
@@ -99,20 +102,9 @@ impl eframe::App for BioTrackerUI {
         while let Ok(Some(msg)) = self.msg_bus.poll(0) {
             match msg {
                 Message::Image(img) => {
-                    last_image = Some(img);
-                }
-                Message::Seekable(seekable) => {
-                    self.seekable = Some(seekable);
-                }
-                Message::Event(video_state) => {
-                    match video_state {
-                        State::Open(_) => {
-                            self.video_plane = VideoPlane::new();
-                            self.seekable = None;
-                        }
-                        _ => {}
+                    if img.stream_id == "Tracking" {
+                        last_image = Some(img);
                     }
-                    self.play_state = video_state;
                 }
                 Message::Features(features) => {
                     self.video_plane.update_features(features);
@@ -120,6 +112,9 @@ impl eframe::App for BioTrackerUI {
                 Message::Entities(entities) => {
                     self.entities_received = true;
                     self.video_plane.update_entities(entities);
+                }
+                Message::VideoDecoderState(decoder_state) => {
+                    self.decoder_state = Some(decoder_state);
                 }
                 _ => eprintln!("Unexpected message {:?}", msg),
             }
@@ -129,7 +124,7 @@ impl eframe::App for BioTrackerUI {
         // we always skip to the newest frame. This happens, when the application does not render,
         // because it is minimised.
         if let Some(img) = last_image {
-            self.current_pts = img.pts;
+            self.current_timestamp = img.timestamp;
             let render_state = frame.wgpu_render_state().unwrap();
             let image_buffer = SharedBuffer::open(&img.shm_id).unwrap();
 
@@ -190,36 +185,37 @@ impl eframe::App for BioTrackerUI {
 
             egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if let Some(seekable) = &self.seekable {
-                        if self.play_state == State::Play {
-                            if ui.add(egui::Button::new("⏸")).clicked() {
-                                self.msg_bus.send(Message::Command(State::Pause)).unwrap();
-                            }
-                        } else {
-                            if ui.add(egui::Button::new("⏵")).clicked() {
-                                self.msg_bus.send(Message::Command(State::Play)).unwrap();
-                            }
+                    if let Some(state) = &self.decoder_state {
+                        let (toggle_state, icon) = match VideoState::from_i32(state.state) {
+                            Some(VideoState::Playing) => (VideoState::Paused, "⏸"),
+                            _ => (VideoState::Playing, "▶"),
+                        };
+                        if ui.add(egui::Button::new(icon)).clicked() {
+                            cmd.set_state(toggle_state);
                         }
 
                         let available_size = ui.available_size_before_wrap();
                         let label_size = ui.available_size() / 8.0;
                         let slider_size = available_size - (label_size);
 
-                        ui.label(&self.current_pts.to_string());
+                        ui.label(&self.current_timestamp.to_string());
                         ui.spacing_mut().slider_width = slider_size.x;
-                        let response = ui.add(
-                            egui::Slider::new(&mut self.seek_pts.0, 0..=seekable.end.0)
+                        if state.frame_count > 0 {
+                            let response = ui.add(
+                                egui::Slider::new(
+                                    &mut self.seek_framenumber,
+                                    0..=state.frame_count,
+                                )
                                 .show_value(false),
-                        );
-                        if response.drag_released() || response.lost_focus() || response.changed() {
-                            self.msg_bus
-                                .send(Message::Command(State::Seek(self.seek_pts)))
-                                .unwrap();
-                        }
-                        ui.label(&seekable.end.to_string());
-                    } else {
-                        if ui.add(egui::Button::new("⏵")).clicked() {
-                            self.filemenu();
+                            );
+                            if response.drag_released()
+                                || response.lost_focus()
+                                || response.changed()
+                            {
+                                cmd.frame_number = Some(self.seek_framenumber);
+                            }
+
+                            ui.label(&state.frame_number.to_string());
                         }
                     }
                 });
@@ -228,6 +224,7 @@ impl eframe::App for BioTrackerUI {
             self.side_panel.show(
                 ctx,
                 &mut self.msg_bus,
+                &mut self.experiment_state,
                 &mut self.persistent_state,
                 &mut self.video_plane,
             );
@@ -254,6 +251,15 @@ impl eframe::App for BioTrackerUI {
                     });
                 });
             }
+            if cmd.path.is_some()
+                || cmd.frame_number.is_some()
+                || cmd.fps.is_some()
+                || cmd.state.is_some()
+            {
+                self.msg_bus
+                    .send(Message::VideoDecoderCommand(cmd))
+                    .unwrap();
+            }
             ctx.request_repaint();
         }
     }
@@ -261,7 +267,7 @@ impl eframe::App for BioTrackerUI {
     fn post_rendering(&mut self, _window_size_px: [u32; 2], _frame: &eframe::Frame) {
         if self.entities_received {
             self.offscreen_renderer
-                .post_rendering(&self.msg_bus, &self.current_pts)
+                .post_rendering(&self.msg_bus, self.current_timestamp)
                 .unwrap();
             self.entities_received = false;
         }

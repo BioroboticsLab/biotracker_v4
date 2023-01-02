@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package biotracker.experiment;
+
+message ExperimentState {
+  bool recording = 1;
+  uint32 entity_count = 2;
+}

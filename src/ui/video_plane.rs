@@ -2,10 +2,10 @@ use super::{
     color::{Palette, ALPHABET},
     texture::Texture,
 };
-use libtracker::{Entities, ImageFeature, ImageFeatures};
+use libtracker::{Entities, Feature, Features};
 
 pub struct VideoPlane {
-    last_features: Option<ImageFeatures>,
+    last_features: Option<Features>,
     last_entities: Option<Entities>,
     color_palette: Palette,
     draw_features: bool,
@@ -23,7 +23,7 @@ impl VideoPlane {
         }
     }
 
-    pub fn update_features(&mut self, features: ImageFeatures) {
+    pub fn update_features(&mut self, features: Features) {
         self.last_features = Some(features);
     }
 
@@ -35,29 +35,25 @@ impl VideoPlane {
         &self,
         painter: &egui::Painter,
         to_screen: &egui::emath::RectTransform,
-        feature: &ImageFeature,
+        feature: &Feature,
         color: egui::Color32,
     ) {
         let (nodes, edges) = (&feature.nodes, &feature.edges);
         for edge in edges {
-            let point_from = &nodes[edge.from].point;
-            let point_to = &nodes[edge.to].point;
-            if point_from.x.is_none()
-                || point_from.y.is_none()
-                || point_to.x.is_none()
-                || point_to.y.is_none()
-            {
+            let from_idx = edge.from as usize;
+            let to_idx = edge.to as usize;
+            let from = to_screen * egui::pos2(nodes[from_idx].x, nodes[from_idx].y);
+            let to = to_screen * egui::pos2(nodes[to_idx].x, nodes[to_idx].y);
+            if from.any_nan() || to.any_nan() {
                 continue;
             }
-            let from = to_screen * egui::pos2(point_from.x.unwrap(), point_from.y.unwrap());
-            let to = to_screen * egui::pos2(point_to.x.unwrap(), point_to.y.unwrap());
             painter.line_segment([from, to], egui::Stroke::new(2.0, egui::Color32::BLACK));
         }
         for node in nodes {
-            if node.point.x.is_none() || node.point.y.is_none() {
+            let point = to_screen * egui::pos2(node.x, node.y);
+            if point.any_nan() {
                 continue;
             }
-            let point = to_screen * egui::pos2(node.point.x.unwrap(), node.point.y.unwrap());
             painter.circle(
                 point,
                 5.0,

@@ -1,6 +1,6 @@
 use super::app::PersistentState;
 use super::video_plane::VideoPlane;
-use libtracker::{message_bus::Client, Action, Message};
+use libtracker::{message_bus::Client, protocol::*};
 
 pub struct SidePanel {}
 
@@ -13,20 +13,25 @@ impl SidePanel {
         &mut self,
         ctx: &egui::Context,
         msg_bus: &mut Client,
+        experiment_state: &mut ExperimentState,
         persistent_state: &mut PersistentState,
         video_plane: &mut VideoPlane,
     ) {
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.collapsing("Experiment", |ui| {
+                    let mut entity_count_changed = false;
                     if ui.button("Add Entity").clicked() {
-                        msg_bus
-                            .send(Message::UserAction(Action::AddEntity))
-                            .unwrap();
+                        experiment_state.entity_count += 1;
+                        entity_count_changed = true;
                     }
-                    if ui.button("Remove Entity").clicked() {
+                    if ui.button("Remove Entity").clicked() && experiment_state.entity_count > 0 {
+                        experiment_state.entity_count -= 1;
+                        entity_count_changed = true;
+                    }
+                    if entity_count_changed {
                         msg_bus
-                            .send(Message::UserAction(Action::RemoveEntity))
+                            .send(Message::ExperimentState(experiment_state.clone()))
                             .unwrap();
                     }
                 });

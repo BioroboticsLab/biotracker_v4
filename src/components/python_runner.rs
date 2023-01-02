@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
-use libtracker::Component;
+use libtracker::{message_bus::Client, CommandLineArguments, Component};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub struct PythonRunner {
     venv_path: PathBuf,
@@ -8,6 +9,13 @@ pub struct PythonRunner {
 }
 
 impl Component for PythonRunner {
+    fn new(_msg_bus: Client, args: Arc<CommandLineArguments>) -> Self {
+        Self {
+            venv_path: args.tracker_venv.as_ref().unwrap().clone(),
+            component_path: args.tracker_cmd.as_ref().unwrap().clone(),
+        }
+    }
+
     fn run(&mut self) -> Result<()> {
         let cmd = format!(
             "source {}/bin/activate && python3 {}",
@@ -40,11 +48,4 @@ impl Component for PythonRunner {
     }
 }
 
-impl PythonRunner {
-    pub fn new(venv_path: PathBuf, component_path: PathBuf) -> Self {
-        Self {
-            venv_path,
-            component_path,
-        }
-    }
-}
+impl PythonRunner {}

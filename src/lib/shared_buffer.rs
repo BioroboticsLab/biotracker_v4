@@ -31,17 +31,17 @@ impl SharedBuffer {
     }
 }
 
-pub struct BufferHistory {
+pub struct DoubleBuffer {
     data: VecDeque<SharedBuffer>,
 }
 
-impl BufferHistory {
+impl DoubleBuffer {
     pub fn new() -> Self {
         Self { data: [].into() }
     }
 
     pub fn push(&mut self, buffer: SharedBuffer) {
-        if self.data.len() >= 16 {
+        if self.data.len() >= 2 {
             self.data.pop_front();
         }
         self.data.push_back(buffer);

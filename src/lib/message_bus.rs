@@ -1,8 +1,6 @@
+use super::protocol::{Message, MessageType};
 use anyhow::{anyhow, Result};
-
-use zmq::{Context, Message, PollEvents, Socket};
-
-use super::protocol::Message as BioTrackerMessage;
+use zmq::{Context, Message as ZmqMessage, PollEvents, Socket};
 
 pub struct Server {
     #[allow(dead_code)]
@@ -33,8 +31,8 @@ impl Server {
         loop {
             zmq::poll(&mut poll_items, -1)?;
             if poll_items[collector].is_readable() {
-                let mut topic = Message::new();
-                let mut msg = Message::new();
+                let mut topic = ZmqMessage::new();
+                let mut msg = ZmqMessage::new();
                 self.pull.recv(&mut topic, 0)?;
                 assert!(self.pull.get_rcvmore()?);
                 self.pull.recv(&mut msg, 0)?;
@@ -52,22 +50,6 @@ pub struct Client {
     sub: Socket,
 }
 
-fn to_topic(msg: &BioTrackerMessage) -> &str {
-    let topic = match msg {
-        BioTrackerMessage::Command(_) => "Command",
-        BioTrackerMessage::Event(_) => "Event",
-        BioTrackerMessage::Seekable(_) => "Seekable",
-        BioTrackerMessage::Shutdown => "Shutdown",
-        BioTrackerMessage::Image(_) => "Image",
-        BioTrackerMessage::AnnotatedImage(_) => "AnnotatedImage",
-        BioTrackerMessage::Features(_) => "Feature",
-        BioTrackerMessage::Entities(_) => "Entities",
-        BioTrackerMessage::UserAction(_) => "UserAction",
-        BioTrackerMessage::ComponentSettings(_) => "ComponentSettings",
-    };
-    topic
-}
-
 impl Client {
     pub fn new() -> Result<Self> {
         let zctx = Context::new();
@@ -78,38 +60,39 @@ impl Client {
         Ok(Self { zctx, push, sub })
     }
 
-    pub fn subscribe(&self, topic: &str) -> Result<()> {
-        self.sub
-            .set_subscribe(topic.as_bytes())
-            .map_err(|e| anyhow!("{e}"))
+    pub fn subscribe_str(&self, topic: &str) -> Result<()> {
+        self.sub.set_subscribe(topic.as_bytes())?;
+        Ok(())
     }
 
-    pub fn poll(&self, timeout: i64) -> Result<Option<BioTrackerMessage>> {
-        if self.sub.poll(PollEvents::POLLIN, timeout)? > 0 {
-            let mut msg = Message::new();
-            self.sub.recv(&mut msg, 0)?;
-            assert!(self.sub.get_rcvmore()?);
-            self.sub.recv(&mut msg, 0)?;
-            if let Some(msg_str) = msg.as_str() {
-                return match serde_json::from_str(msg_str) {
-                    Ok(deserialized) => Ok(Some(deserialized)),
-                    Err(e) => Err(anyhow!(
-                        "Failed to Deserialize message: {msg_str}, error {e}"
-                    )),
-                };
-            } else {
-                return Err(anyhow!("Failed to get message string"));
-            }
-        } else {
-            return Ok(None);
+    pub fn subscribe(&self, topics: &[MessageType]) -> Result<()> {
+        for topic in topics {
+            self.sub.set_subscribe(topic.as_str_name().as_bytes())?;
         }
+        Ok(())
     }
 
-    pub fn send(&self, msg: BioTrackerMessage) -> Result<()> {
-        let serialized = serde_json::to_string(&msg)?;
-        let topic = to_topic(&msg);
-        self.push.send(topic, zmq::SNDMORE)?;
-        self.push.send(&serialized, 0)?;
+    pub fn poll(&self, timeout: i64) -> Result<Option<Message>> {
+        if self.sub.poll(PollEvents::POLLIN, timeout)? > 0 {
+            let mut zmq_msg = ZmqMessage::new();
+            self.sub.recv(&mut zmq_msg, 0)?;
+            if let Some(topic) = zmq_msg.as_str() {
+                let ty = MessageType::from_str_name(topic).expect("Invalid topic");
+                assert!(self.sub.get_rcvmore()?);
+                self.sub.recv(&mut zmq_msg, 0)?;
+                let deserialized = Message::deserialize(ty, &*zmq_msg)?;
+                return Ok(Some(deserialized));
+            } else {
+                return Err(anyhow!("Failed to decode topic"));
+            }
+        }
+        return Ok(None);
+    }
+
+    pub fn send(&self, msg: Message) -> Result<()> {
+        let (ty, buf) = msg.serialize();
+        self.push.send(ty.as_str_name(), zmq::SNDMORE)?;
+        self.push.send(buf, 0)?;
         Ok(())
     }
 }

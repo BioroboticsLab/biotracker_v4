@@ -1,7 +1,8 @@
 use anyhow::{anyhow, Result};
 use cv::prelude::*;
 use cv::videoio::VideoWriter;
-use libtracker::{message_bus::Client, Component, Message, SharedBuffer};
+use libtracker::{message_bus::Client, protocol::*, CommandLineArguments, Component, SharedBuffer};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct VideoEncoderSettings {
@@ -23,39 +24,36 @@ pub struct VideoEncoder {
 }
 
 impl Component for VideoEncoder {
+    fn new(msg_bus: Client, args: Arc<CommandLineArguments>) -> Self {
+        let mut encoder = Self {
+            msg_bus,
+            encode: None,
+        };
+        if let Some(path) = &args.save_video {
+            let settings = VideoEncoderSettings {
+                fps: 30.0,
+                width: 640,
+                height: 480,
+                path: path.clone().to_str().unwrap().to_string(),
+            };
+            encoder.start(settings).unwrap();
+        }
+        encoder
+    }
+
     /// Get images from the message bus and encode them into a video.
     fn run(&mut self) -> Result<()> {
-        self.msg_bus.subscribe("AnnotatedImage")?;
-        self.msg_bus.subscribe("Shutdown")?;
-        loop {
-            match self.msg_bus.poll(-1)?.unwrap() {
-                Message::AnnotatedImage(img) => {
-                    if let Some(encode) = &mut self.encode {
-                        let image_buffer = SharedBuffer::open(&img.shm_id)?;
-                        let cv_img = unsafe {
-                            let data = image_buffer.as_slice();
-                            let cv_img = Mat::new_nd_with_data(
-                                &[img.width as i32, img.height as i32],
-                                cv::core::CV_8UC4,
-                                data.as_ptr() as *mut std::ffi::c_void,
-                                None,
-                            )?;
-                            cv_img
-                        };
-                        let mut img_bgr = Mat::default();
-                        cv::imgproc::cvt_color(
-                            &cv_img,
-                            &mut img_bgr,
-                            cv::imgproc::COLOR_RGBA2BGR,
-                            0,
-                        )?;
-                        encode.writer.write(&img_bgr)?;
-                        encode.frame_number += 1;
+        self.msg_bus
+            .subscribe(&[MessageType::Image, MessageType::Shutdown])?;
+        while let Some(message) = self.msg_bus.poll(-1)? {
+            match message {
+                Message::Image(img) => {
+                    if img.stream_id == "Annotated" {
+                        self.encode(img)?;
                     }
                 }
                 Message::Shutdown => {
                     self.finish()?;
-                    break;
                 }
                 _ => {}
             }
@@ -65,13 +63,6 @@ impl Component for VideoEncoder {
 }
 
 impl VideoEncoder {
-    pub fn new(msg_bus: Client) -> Self {
-        Self {
-            msg_bus,
-            encode: None,
-        }
-    }
-
     /// Initialize a VideoWriter and start encoding.
     pub fn start(&mut self, settings: VideoEncoderSettings) -> Result<()> {
         assert!(self.encode.is_none());
@@ -99,6 +90,27 @@ impl VideoEncoder {
     pub fn finish(&mut self) -> Result<()> {
         assert!(self.encode.is_some());
         let _ = self.encode.take();
+        Ok(())
+    }
+
+    pub fn encode(&mut self, img: Image) -> Result<()> {
+        if let Some(encode) = &mut self.encode {
+            let image_buffer = SharedBuffer::open(&img.shm_id)?;
+            let cv_img = unsafe {
+                let data = image_buffer.as_slice();
+                let cv_img = Mat::new_nd_with_data(
+                    &[img.width as i32, img.height as i32],
+                    cv::core::CV_8UC4,
+                    data.as_ptr() as *mut std::ffi::c_void,
+                    None,
+                )?;
+                cv_img
+            };
+            let mut img_bgr = Mat::default();
+            cv::imgproc::cvt_color(&cv_img, &mut img_bgr, cv::imgproc::COLOR_RGBA2BGR, 0)?;
+            encode.writer.write(&img_bgr)?;
+            encode.frame_number += 1;
+        }
         Ok(())
     }
 }
