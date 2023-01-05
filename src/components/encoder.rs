@@ -4,18 +4,10 @@ use cv::videoio::VideoWriter;
 use libtracker::{message_bus::Client, protocol::*, CommandLineArguments, Component, SharedBuffer};
 use std::sync::Arc;
 
-#[derive(Debug)]
-pub struct VideoEncoderSettings {
-    pub fps: f64,
-    pub width: u32,
-    pub height: u32,
-    pub path: String,
-}
-
 pub struct VideoEncode {
     writer: VideoWriter,
     frame_number: u64,
-    _settings: VideoEncoderSettings,
+    state: VideoEncoderState,
 }
 
 pub struct VideoEncoder {
@@ -24,32 +16,38 @@ pub struct VideoEncoder {
 }
 
 impl Component for VideoEncoder {
-    fn new(msg_bus: Client, args: Arc<CommandLineArguments>) -> Self {
-        let mut encoder = Self {
+    fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+        Self {
             msg_bus,
             encode: None,
-        };
-        if let Some(path) = &args.save_video {
-            let settings = VideoEncoderSettings {
-                fps: 30.0,
-                width: 640,
-                height: 480,
-                path: path.clone().to_str().unwrap().to_string(),
-            };
-            encoder.start(settings).unwrap();
         }
-        encoder
     }
 
     /// Get images from the message bus and encode them into a video.
     fn run(&mut self) -> Result<()> {
-        self.msg_bus
-            .subscribe(&[MessageType::Image, MessageType::Shutdown])?;
+        self.msg_bus.subscribe(&[
+            MessageType::Image,
+            MessageType::Shutdown,
+            MessageType::VideoEncoderCommand,
+        ])?;
         while let Some(message) = self.msg_bus.poll(-1)? {
             match message {
-                Message::Image(img) => {
-                    if img.stream_id == "Annotated" {
-                        self.encode(img)?;
+                Message::Image(img) => self.process_image(img)?,
+                Message::VideoEncoderCommand(cmd) => {
+                    if let Some(settings) = cmd.settings {
+                        self.initialize(settings)?;
+                        self.send_state_update()?;
+                    }
+                    if let Some(state) = cmd.state {
+                        match VideoState::from_i32(state).unwrap() {
+                            VideoState::Playing | VideoState::Paused => {
+                                if let Some(encode) = &mut self.encode {
+                                    encode.state.state = state;
+                                    self.send_state_update()?;
+                                }
+                            }
+                            VideoState::Eos | VideoState::Stopped => self.finish()?,
+                        }
                     }
                 }
                 Message::Shutdown => {
@@ -63,8 +61,16 @@ impl Component for VideoEncoder {
 }
 
 impl VideoEncoder {
+    pub fn send_state_update(&self) -> Result<()> {
+        if let Some(encode) = &self.encode {
+            self.msg_bus
+                .send(Message::VideoEncoderState(encode.state.clone()))?;
+        }
+        Ok(())
+    }
+
     /// Initialize a VideoWriter and start encoding.
-    pub fn start(&mut self, settings: VideoEncoderSettings) -> Result<()> {
+    pub fn initialize(&mut self, settings: VideoEncoderState) -> Result<()> {
         assert!(self.encode.is_none());
         let writer = VideoWriter::new(
             &settings.path,
@@ -82,19 +88,28 @@ impl VideoEncoder {
         self.encode = Some(VideoEncode {
             writer,
             frame_number: 0,
-            _settings: settings,
+            state: settings,
         });
         Ok(())
     }
 
     pub fn finish(&mut self) -> Result<()> {
-        assert!(self.encode.is_some());
-        let _ = self.encode.take();
+        if let Some(encode) = &mut self.encode {
+            encode.state.state = VideoState::Eos.into();
+            self.send_state_update()?;
+        }
+        _ = self.encode.take();
         Ok(())
     }
 
-    pub fn encode(&mut self, img: Image) -> Result<()> {
+    pub fn process_image(&mut self, img: Image) -> Result<()> {
+        if img.stream_id != "Annotated" {
+            return Ok(());
+        }
         if let Some(encode) = &mut self.encode {
+            if VideoState::from_i32(encode.state.state).unwrap() != VideoState::Playing {
+                return Ok(());
+            }
             let image_buffer = SharedBuffer::open(&img.shm_id)?;
             let cv_img = unsafe {
                 let data = image_buffer.as_slice();

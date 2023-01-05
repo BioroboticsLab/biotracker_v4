@@ -14,6 +14,8 @@ message VideoDecoderState {
   double fps = 2;
   uint32 frame_count = 3;
   uint32 frame_number = 5;
+  uint32 height = 7;
+  uint32 width = 8;
   VideoState state = 6;
 }
 
@@ -22,4 +24,17 @@ message VideoDecoderCommand {
   optional double fps = 2;
   optional uint32 frame_number = 3;
   optional VideoState state = 4;
+}
+
+message VideoEncoderState {
+  string path = 1;
+  double fps = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  VideoState state = 5;
+}
+
+message VideoEncoderCommand {
+  optional VideoEncoderState settings = 1;
+  optional VideoState state = 2;
 }

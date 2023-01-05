@@ -12,6 +12,8 @@ pub enum Message {
     Entities(Entities),
     VideoDecoderState(VideoDecoderState),
     VideoDecoderCommand(VideoDecoderCommand),
+    VideoEncoderState(VideoEncoderState),
+    VideoEncoderCommand(VideoEncoderCommand),
     ExperimentState(ExperimentState),
     Shutdown,
 }
@@ -27,6 +29,12 @@ impl Message {
             }
             MessageType::VideoDecoderCommand => Ok(Message::VideoDecoderCommand(
                 VideoDecoderCommand::decode(buf)?,
+            )),
+            MessageType::VideoEncoderState => {
+                Ok(Message::VideoEncoderState(VideoEncoderState::decode(buf)?))
+            }
+            MessageType::VideoEncoderCommand => Ok(Message::VideoEncoderCommand(
+                VideoEncoderCommand::decode(buf)?,
             )),
             MessageType::ExperimentState => {
                 Ok(Message::ExperimentState(ExperimentState::decode(buf)?))
@@ -45,6 +53,12 @@ impl Message {
             }
             Message::VideoDecoderCommand(msg) => {
                 (MessageType::VideoDecoderCommand, msg.encode_to_vec())
+            }
+            Message::VideoEncoderState(msg) => {
+                (MessageType::VideoEncoderState, msg.encode_to_vec())
+            }
+            Message::VideoEncoderCommand(msg) => {
+                (MessageType::VideoEncoderCommand, msg.encode_to_vec())
             }
             Message::ExperimentState(msg) => (MessageType::ExperimentState, msg.encode_to_vec()),
             Message::Shutdown => (MessageType::Shutdown, Shutdown::default().encode_to_vec()),

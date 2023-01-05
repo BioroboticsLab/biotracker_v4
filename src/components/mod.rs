@@ -6,6 +6,6 @@ pub mod python_runner;
 
 pub use biotracker::Core;
 pub use decoder::VideoDecoder;
-pub use encoder::{VideoEncoder, VideoEncoderSettings};
+pub use encoder::VideoEncoder;
 pub use matcher::Matcher;
 pub use python_runner::PythonRunner;

@@ -89,6 +89,8 @@ impl VideoDecoder {
         let mut video_capture = VideoCapture::from_file(path, 0)?;
         let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u32;
         let frame_count = video_capture.get(cv::videoio::CAP_PROP_FRAME_COUNT)? as u32;
+        let width = video_capture.get(cv::videoio::CAP_PROP_FRAME_WIDTH)? as u32;
+        let height = video_capture.get(cv::videoio::CAP_PROP_FRAME_HEIGHT)? as u32;
         let mut fps = video_capture.get(cv::videoio::CAP_PROP_FPS)?;
         if fps == 0.0 {
             fps = 30.0;
@@ -100,6 +102,8 @@ impl VideoDecoder {
                 frame_number,
                 frame_count,
                 fps,
+                width,
+                height,
                 state: VideoState::Playing.into(),
             },
             capture: video_capture,

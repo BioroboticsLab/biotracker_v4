@@ -1,4 +1,4 @@
-use super::app::PersistentState;
+use super::app::{ComponentState, PersistentState};
 use super::video_plane::VideoPlane;
 use libtracker::{message_bus::Client, protocol::*};
 
@@ -13,7 +13,7 @@ impl SidePanel {
         &mut self,
         ctx: &egui::Context,
         msg_bus: &mut Client,
-        experiment_state: &mut ExperimentState,
+        component_state: &mut ComponentState,
         persistent_state: &mut PersistentState,
         video_plane: &mut VideoPlane,
     ) {
@@ -21,17 +21,18 @@ impl SidePanel {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.collapsing("Experiment", |ui| {
                     let mut entity_count_changed = false;
+                    let experiment = &mut component_state.experiment;
                     if ui.button("Add Entity").clicked() {
-                        experiment_state.entity_count += 1;
+                        experiment.entity_count += 1;
                         entity_count_changed = true;
                     }
-                    if ui.button("Remove Entity").clicked() && experiment_state.entity_count > 0 {
-                        experiment_state.entity_count -= 1;
+                    if ui.button("Remove Entity").clicked() && experiment.entity_count > 0 {
+                        experiment.entity_count -= 1;
                         entity_count_changed = true;
                     }
                     if entity_count_changed {
                         msg_bus
-                            .send(Message::ExperimentState(experiment_state.clone()))
+                            .send(Message::ExperimentState(experiment.clone()))
                             .unwrap();
                     }
                 });
@@ -49,6 +50,37 @@ impl SidePanel {
             });
             ui.collapsing("Video", |ui| {
                 video_plane.show_settings(ui);
+            });
+            ui.collapsing("Recording", |ui| {
+                match (&component_state.decoder, &mut component_state.encoder) {
+                    (Some(_decoder), Some(_encoder)) => {
+                        if ui.button("Stop Recording").clicked() {
+                            let cmd = VideoEncoderCommand {
+                                state: Some(VideoState::Stopped.into()),
+                                ..Default::default()
+                            };
+                            msg_bus.send(Message::VideoEncoderCommand(cmd)).unwrap();
+                        }
+                    }
+                    (Some(decoder), None) => {
+                        if ui.button("Start Recording").clicked() {
+                            let cmd = VideoEncoderCommand {
+                                settings: Some(VideoEncoderState {
+                                    path: "test.mp4".to_string(),
+                                    width: decoder.width,
+                                    height: decoder.height,
+                                    fps: decoder.fps,
+                                    state: VideoState::Playing.into(),
+                                }),
+                                state: None,
+                            };
+                            msg_bus.send(Message::VideoEncoderCommand(cmd)).unwrap();
+                        }
+                    }
+                    (None, _) => {
+                        ui.label("No video source found");
+                    }
+                }
             });
         });
     }

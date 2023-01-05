@@ -10,6 +10,12 @@ pub struct PersistentState {
     pub scaling: f32,
 }
 
+pub struct ComponentState {
+    pub decoder: Option<VideoDecoderState>,
+    pub encoder: Option<VideoEncoderState>,
+    pub experiment: ExperimentState,
+}
+
 pub struct BioTrackerUI {
     persistent_state: PersistentState,
     msg_bus: Client,
@@ -23,8 +29,7 @@ pub struct BioTrackerUI {
     onscreen_id: egui::TextureId,
     offscreen_id: egui::TextureId,
     entities_received: bool,
-    decoder_state: Option<VideoDecoderState>,
-    experiment_state: ExperimentState,
+    component_state: ComponentState,
 }
 
 impl BioTrackerUI {
@@ -41,6 +46,7 @@ impl BioTrackerUI {
         msg_bus
             .subscribe(&[
                 MessageType::VideoDecoderState,
+                MessageType::VideoEncoderState,
                 MessageType::Image,
                 MessageType::Features,
                 MessageType::Entities,
@@ -67,8 +73,11 @@ impl BioTrackerUI {
             onscreen_id: egui::epaint::TextureId::default(),
             offscreen_id: egui::epaint::TextureId::default(),
             entities_received: false,
-            decoder_state: None,
-            experiment_state: ExperimentState::default(),
+            component_state: ComponentState {
+                decoder: None,
+                encoder: None,
+                experiment: ExperimentState::default(),
+            },
         })
     }
 
@@ -114,7 +123,14 @@ impl eframe::App for BioTrackerUI {
                     self.video_plane.update_entities(entities);
                 }
                 Message::VideoDecoderState(decoder_state) => {
-                    self.decoder_state = Some(decoder_state);
+                    self.component_state.decoder = Some(decoder_state);
+                }
+                Message::VideoEncoderState(encoder_state) => {
+                    if VideoState::from_i32(encoder_state.state).unwrap() == VideoState::Eos {
+                        self.component_state.encoder = None;
+                    } else {
+                        self.component_state.encoder = Some(encoder_state);
+                    }
                 }
                 _ => eprintln!("Unexpected message {:?}", msg),
             }
@@ -185,8 +201,8 @@ impl eframe::App for BioTrackerUI {
 
             egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if let Some(state) = &self.decoder_state {
-                        let (toggle_state, icon) = match VideoState::from_i32(state.state) {
+                    if let Some(decoder_state) = &self.component_state.decoder {
+                        let (toggle_state, icon) = match VideoState::from_i32(decoder_state.state) {
                             Some(VideoState::Playing) => (VideoState::Paused, "⏸"),
                             _ => (VideoState::Playing, "▶"),
                         };
@@ -200,11 +216,11 @@ impl eframe::App for BioTrackerUI {
 
                         ui.label(&self.current_timestamp.to_string());
                         ui.spacing_mut().slider_width = slider_size.x;
-                        if state.frame_count > 0 {
+                        if decoder_state.frame_count > 0 {
                             let response = ui.add(
                                 egui::Slider::new(
                                     &mut self.seek_framenumber,
-                                    0..=state.frame_count,
+                                    0..=decoder_state.frame_count,
                                 )
                                 .show_value(false),
                             );
@@ -215,7 +231,7 @@ impl eframe::App for BioTrackerUI {
                                 cmd.frame_number = Some(self.seek_framenumber);
                             }
 
-                            ui.label(&state.frame_number.to_string());
+                            ui.label(&decoder_state.frame_number.to_string());
                         }
                     }
                 });
@@ -224,7 +240,7 @@ impl eframe::App for BioTrackerUI {
             self.side_panel.show(
                 ctx,
                 &mut self.msg_bus,
-                &mut self.experiment_state,
+                &mut self.component_state,
                 &mut self.persistent_state,
                 &mut self.video_plane,
             );
