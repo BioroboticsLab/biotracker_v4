@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 struct Playback {
     state: VideoDecoderState,
-    capture: VideoCapture,
+    sampler: Box<dyn VideoSampler>,
 }
 
 pub struct VideoDecoder {
@@ -17,8 +17,71 @@ pub struct VideoDecoder {
     buffer_manager: DoubleBuffer,
     last_frame_msg_sent: Instant,
     last_timestamp: u64,
-    img: Mat,
     playback: Option<Playback>,
+}
+
+trait VideoSampler {
+    fn get_frame(&mut self, timestamp: u64) -> Result<(SharedBuffer, Image)>;
+    fn seek(&mut self, _target_framenumber: u32) -> Result<()> {
+        Err(anyhow::anyhow!("Seek not supported"))
+    }
+}
+
+impl Playback {
+    fn open_path(path: &str) -> Result<Playback> {
+        let mut video_capture = VideoCapture::from_file(path, 0)?;
+        let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u32;
+        let frame_count = video_capture.get(cv::videoio::CAP_PROP_FRAME_COUNT)? as u32;
+        let width = video_capture.get(cv::videoio::CAP_PROP_FRAME_WIDTH)? as u32;
+        let height = video_capture.get(cv::videoio::CAP_PROP_FRAME_HEIGHT)? as u32;
+        let mut fps = video_capture.get(cv::videoio::CAP_PROP_FPS)?;
+        if fps == 0.0 {
+            fps = 30.0;
+            video_capture.set(cv::videoio::CAP_PROP_FPS, 30.0)?;
+        }
+        Ok(Playback {
+            state: VideoDecoderState {
+                path: path.to_string(),
+                frame_number,
+                frame_count,
+                fps,
+                width,
+                height,
+                state: VideoState::Playing.into(),
+            },
+            sampler: Box::new(video_capture),
+        })
+    }
+}
+
+impl VideoSampler for VideoCapture {
+    fn get_frame(&mut self, timestamp: u64) -> Result<(SharedBuffer, Image)> {
+        let mut img = Mat::default();
+        self.read(&mut img)?;
+        let mut img_rgba = Mat::default();
+        cv::imgproc::cvt_color(&img, &mut img_rgba, cv::imgproc::COLOR_BGR2RGBA, 0)?;
+        let data = img_rgba.data_bytes()?;
+        let height = img_rgba.rows() as u32;
+        let width = img_rgba.cols() as u32;
+        let mut image_buffer = SharedBuffer::new(data.len())?;
+        unsafe {
+            image_buffer.as_slice_mut().clone_from_slice(data);
+        }
+        let shm_id = image_buffer.id().to_owned();
+        let image = Image {
+            stream_id: "Tracking".to_owned(),
+            timestamp,
+            shm_id,
+            width,
+            height,
+        };
+        Ok((image_buffer, image))
+    }
+
+    fn seek(&mut self, target_framenumber: u32) -> Result<()> {
+        self.set(cv::videoio::CAP_PROP_POS_FRAMES, target_framenumber as f64)?;
+        Ok(())
+    }
 }
 
 impl Component for VideoDecoder {
@@ -29,7 +92,6 @@ impl Component for VideoDecoder {
             buffer_manager,
             last_frame_msg_sent: Instant::now(),
             last_timestamp: 0,
-            img: Mat::default(),
             playback: None,
         }
     }
@@ -60,7 +122,7 @@ impl Component for VideoDecoder {
 impl VideoDecoder {
     fn handle_command(&mut self, cmd: VideoDecoderCommand) -> Result<()> {
         if let Some(path) = cmd.path {
-            self.open(&path)?;
+            self.playback = Some(Playback::open_path(&path)?);
         }
         if let Some(playback) = &mut self.playback {
             if let Some(state) = cmd.state {
@@ -70,7 +132,8 @@ impl VideoDecoder {
                 playback.state.fps = fps;
             }
             if let Some(frame_number) = cmd.frame_number {
-                self.seek(frame_number)?;
+                playback.sampler.seek(frame_number)?;
+                playback.state.frame_number = frame_number;
             }
             self.send_state_update()?;
         }
@@ -78,42 +141,16 @@ impl VideoDecoder {
     }
 
     fn send_state_update(&self) -> Result<()> {
-        if let Some(Playback { state, capture: _ }) = &self.playback {
+        if let Some(Playback { state, sampler: _ }) = &self.playback {
             self.msg_bus
                 .send(Message::VideoDecoderState(state.clone()))?;
         }
         Ok(())
     }
 
-    fn open(&mut self, path: &str) -> Result<()> {
-        let mut video_capture = VideoCapture::from_file(path, 0)?;
-        let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u32;
-        let frame_count = video_capture.get(cv::videoio::CAP_PROP_FRAME_COUNT)? as u32;
-        let width = video_capture.get(cv::videoio::CAP_PROP_FRAME_WIDTH)? as u32;
-        let height = video_capture.get(cv::videoio::CAP_PROP_FRAME_HEIGHT)? as u32;
-        let mut fps = video_capture.get(cv::videoio::CAP_PROP_FPS)?;
-        if fps == 0.0 {
-            fps = 30.0;
-            video_capture.set(cv::videoio::CAP_PROP_FPS, 30.0)?;
-        }
-        self.playback = Some(Playback {
-            state: VideoDecoderState {
-                path: path.to_string(),
-                frame_number,
-                frame_count,
-                fps,
-                width,
-                height,
-                state: VideoState::Playing.into(),
-            },
-            capture: video_capture,
-        });
-        Ok(())
-    }
-
     fn next_frame(&mut self) -> Result<()> {
         loop {
-            if let Some(Playback { state, capture }) = &mut self.playback {
+            if let Some(Playback { state, sampler }) = &mut self.playback {
                 if VideoState::from_i32(state.state) == Some(VideoState::Playing) {
                     let next_msg_deadline =
                         self.last_frame_msg_sent + Duration::from_secs_f64(1.0 / state.fps);
@@ -122,34 +159,11 @@ impl VideoDecoder {
                     if now < next_msg_deadline {
                         std::thread::sleep(next_msg_deadline - now);
                     }
-                    if !capture.read(&mut self.img)? {
-                        continue;
-                    }
-                    let mut img_rgba = Mat::default();
-                    cv::imgproc::cvt_color(
-                        &self.img,
-                        &mut img_rgba,
-                        cv::imgproc::COLOR_BGR2RGBA,
-                        0,
-                    )?;
-                    let data = img_rgba.data_bytes()?;
-                    let height = img_rgba.rows() as u32;
-                    let width = img_rgba.cols() as u32;
-                    let mut image_buffer = SharedBuffer::new(data.len())?;
-                    unsafe {
-                        image_buffer.as_slice_mut().clone_from_slice(data);
-                    }
-                    let shm_id = image_buffer.id().to_owned();
-                    self.buffer_manager.push(image_buffer);
                     let timestamp = ((state.frame_number as f64 / state.fps) * 1e9) as u64;
-                    self.last_timestamp = timestamp;
-                    self.msg_bus.send(Message::Image(Image {
-                        stream_id: "Tracking".to_owned(),
-                        timestamp,
-                        shm_id,
-                        width,
-                        height,
-                    }))?;
+                    let (image_buffer, image) = sampler.get_frame(timestamp)?;
+                    self.buffer_manager.push(image_buffer);
+                    self.last_timestamp = image.timestamp;
+                    self.msg_bus.send(Message::Image(image))?;
                     state.frame_number += 1;
                     if state.frame_count > 0 && state.frame_number >= state.frame_count {
                         state.state = VideoState::Eos.into();
@@ -159,13 +173,5 @@ impl VideoDecoder {
             }
             return Ok(());
         }
-    }
-
-    fn seek(&mut self, target_framenumber: u32) -> Result<()> {
-        if let Some(Playback { state, capture }) = &mut self.playback {
-            capture.set(cv::videoio::CAP_PROP_POS_FRAMES, target_framenumber as f64)?;
-            state.frame_number = target_framenumber;
-        }
-        Ok(())
     }
 }
