@@ -5,3 +5,4 @@ Cargo.lock
 __pycache__/
 **_pb2.py
 **.mp4
+**.hdf5
