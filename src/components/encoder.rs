@@ -16,13 +16,6 @@ pub struct VideoEncoder {
 }
 
 impl Component for VideoEncoder {
-    fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
-        Self {
-            msg_bus,
-            encode: None,
-        }
-    }
-
     /// Get images from the message bus and encode them into a video.
     fn run(&mut self) -> Result<()> {
         self.msg_bus.subscribe(&[
@@ -61,6 +54,13 @@ impl Component for VideoEncoder {
 }
 
 impl VideoEncoder {
+    pub fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+        Self {
+            msg_bus,
+            encode: None,
+        }
+    }
+
     pub fn send_state_update(&self) -> Result<()> {
         if let Some(encode) = &self.encode {
             self.msg_bus

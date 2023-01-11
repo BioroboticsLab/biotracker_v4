@@ -1,32 +1,17 @@
 use anyhow::{anyhow, Result};
-use libtracker::{message_bus::Client, CommandLineArguments, Component};
-use std::path::PathBuf;
-use std::sync::Arc;
+use libtracker::Component;
 
 pub struct PythonRunner {
-    venv_path: PathBuf,
-    component_path: PathBuf,
+    venv: String,
+    cmd: String,
 }
 
 impl Component for PythonRunner {
-    fn new(_msg_bus: Client, args: Arc<CommandLineArguments>) -> Self {
-        Self {
-            venv_path: args.tracker_venv.as_ref().unwrap().clone(),
-            component_path: args.tracker_cmd.as_ref().unwrap().clone(),
-        }
-    }
-
     fn run(&mut self) -> Result<()> {
-        let cmd = format!(
-            "source {}/bin/activate && python3 {}",
-            self.venv_path.to_str().expect("Invalid python venv path"),
-            self.component_path
-                .to_str()
-                .expect("Invalid python component path")
-        );
+        let shell_cmd = format!("source {}/bin/activate && python3 {}", self.venv, self.cmd);
         let output = std::process::Command::new("/bin/sh")
             .arg("-c")
-            .arg(cmd.clone())
+            .arg(shell_cmd.clone())
             .output()?;
 
         match output.status.success() {
@@ -38,7 +23,7 @@ impl Component for PythonRunner {
                     .unwrap_or("Failed to decode stderr as utf8".to_string());
                 Err(anyhow!(
                     "Commandline: `{}` failed with {}.\nstdout:\n{}\nstderr:\n{}\n",
-                    cmd,
+                    shell_cmd,
                     output.status,
                     stdout,
                     stderr
@@ -48,4 +33,8 @@ impl Component for PythonRunner {
     }
 }
 
-impl PythonRunner {}
+impl PythonRunner {
+    pub fn new(venv: String, cmd: String) -> Self {
+        Self { venv, cmd }
+    }
+}

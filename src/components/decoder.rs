@@ -85,17 +85,6 @@ impl VideoSampler for VideoCapture {
 }
 
 impl Component for VideoDecoder {
-    fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
-        let buffer_manager = DoubleBuffer::new();
-        Self {
-            msg_bus,
-            buffer_manager,
-            last_frame_msg_sent: Instant::now(),
-            last_timestamp: 0,
-            playback: None,
-        }
-    }
-
     fn run(&mut self) -> Result<()> {
         self.msg_bus
             .subscribe(&[MessageType::VideoDecoderCommand, MessageType::Features])?;
@@ -120,6 +109,17 @@ impl Component for VideoDecoder {
 }
 
 impl VideoDecoder {
+    pub fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+        let buffer_manager = DoubleBuffer::new();
+        Self {
+            msg_bus,
+            buffer_manager,
+            last_frame_msg_sent: Instant::now(),
+            last_timestamp: 0,
+            playback: None,
+        }
+    }
+
     fn handle_command(&mut self, cmd: VideoDecoderCommand) -> Result<()> {
         if let Some(path) = cmd.path {
             self.playback = Some(Playback::open_path(&path)?);

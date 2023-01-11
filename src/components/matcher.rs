@@ -19,14 +19,6 @@ pub struct Matcher {
 }
 
 impl Component for Matcher {
-    fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
-        Self {
-            msg_bus,
-            last_matching: vec![],
-            experiment: ExperimentState::default(),
-        }
-    }
-
     fn run(&mut self) -> Result<()> {
         self.msg_bus
             .subscribe(&[MessageType::Features, MessageType::ExperimentState])?;
@@ -49,6 +41,14 @@ impl Component for Matcher {
 }
 
 impl Matcher {
+    pub fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+        Self {
+            msg_bus,
+            last_matching: vec![],
+            experiment: ExperimentState::default(),
+        }
+    }
+
     fn matching(&mut self, features_msg: &mut Features) -> Entities {
         let timestamp = features_msg.timestamp;
         let features = &mut features_msg.features;

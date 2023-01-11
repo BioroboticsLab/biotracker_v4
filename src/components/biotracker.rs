@@ -27,9 +27,16 @@ impl Core {
     }
 
     pub fn start(&mut self) -> Result<()> {
-        if self.args.tracker_venv.is_some() && self.args.tracker_cmd.is_some() {
-            self.add_component(PythonRunner::new)?;
+        if let (Some(venv), Some(cmd)) = (&self.args.tracker_venv, &self.args.tracker_cmd) {
+            let (venv, cmd) = (venv.to_owned(), cmd.to_owned());
+            self.add_component(|_msg_bus, _args| PythonRunner::new(venv, cmd))?;
         }
+
+        if let (Some(venv), Some(cmd)) = (&self.args.robofish_venv, &self.args.robofish_cmd) {
+            let (venv, cmd) = (venv.to_owned(), cmd.to_owned());
+            self.add_component(|_msg_bus, _args| PythonRunner::new(venv, cmd))?;
+        }
+
         self.add_component(VideoEncoder::new)?;
         self.add_component(Matcher::new)?;
         self.add_component(VideoDecoder::new)?;
