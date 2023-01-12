@@ -2,47 +2,6 @@ use super::protocol::{Message, MessageType};
 use anyhow::{anyhow, Result};
 use zmq::{Context, Message as ZmqMessage, PollEvents, Socket};
 
-pub struct Server {
-    #[allow(dead_code)]
-    zctx: Context,
-    pull: Socket,
-    publish: Socket,
-}
-
-impl Server {
-    pub fn new() -> Result<Self> {
-        let zctx = Context::new();
-        let pull = zctx.socket(zmq::PULL)?;
-        pull.bind("tcp://*:6667")?;
-        let publish = zctx.socket(zmq::PUB)?;
-        publish.bind("tcp://*:6668")?;
-
-        Ok(Self {
-            zctx,
-            pull,
-            publish,
-        })
-    }
-
-    pub fn run(&self) -> Result<()> {
-        let collector = 0;
-        let mut poll_items = [self.pull.as_poll_item(PollEvents::POLLIN)];
-
-        loop {
-            zmq::poll(&mut poll_items, -1)?;
-            if poll_items[collector].is_readable() {
-                let mut topic = ZmqMessage::new();
-                let mut msg = ZmqMessage::new();
-                self.pull.recv(&mut topic, 0)?;
-                assert!(self.pull.get_rcvmore()?);
-                self.pull.recv(&mut msg, 0)?;
-                self.publish.send(topic, zmq::SNDMORE)?;
-                self.publish.send(msg, 0)?;
-            }
-        }
-    }
-}
-
 pub struct Client {
     #[allow(dead_code)]
     zctx: Context,

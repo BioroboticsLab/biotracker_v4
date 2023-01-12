@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Result};
-use libtracker::{message_bus::Client, protocol::*, CommandLineArguments, Component};
+use libtracker::{protocol::*, Client, CommandLineArguments, Component};
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
 use rand::Rng;
 use std::collections::HashMap;
@@ -15,7 +15,7 @@ struct MatchedEntity {
 pub struct Matcher {
     msg_bus: Client,
     last_matching: Vec<MatchedEntity>,
-    experiment: ExperimentState,
+    entity_count: u32,
 }
 
 impl Component for Matcher {
@@ -30,8 +30,8 @@ impl Component for Matcher {
                         self.msg_bus.send(Message::Entities(entities))?;
                     }
                 }
-                Message::ExperimentState(experiment_state) => {
-                    self.experiment = experiment_state;
+                Message::ExperimentState(experiment) => {
+                    self.entity_count = experiment.entity_count;
                 }
                 _ => return Err(anyhow!("Unexpected message {:?}", message)),
             }
@@ -45,7 +45,7 @@ impl Matcher {
         Self {
             msg_bus,
             last_matching: vec![],
-            experiment: ExperimentState::default(),
+            entity_count: 0,
         }
     }
 
@@ -53,14 +53,14 @@ impl Matcher {
         let timestamp = features_msg.timestamp;
         let features = &mut features_msg.features;
         // Remove lowest scoring features, if there is more then we expect
-        if features.len() > self.experiment.entity_count as usize {
+        if features.len() > self.entity_count as usize {
             // sort by score in descending order
             features.sort_by(|a, b| {
                 b.score
                     .partial_cmp(&a.score)
                     .unwrap_or(std::cmp::Ordering::Equal)
             });
-            while features.len() > self.experiment.entity_count as usize {
+            while features.len() > self.entity_count as usize {
                 features.pop();
             }
         }

@@ -6,5 +6,6 @@ pub mod shared_buffer;
 
 pub use cli::CommandLineArguments;
 pub use component::Component;
+pub use message_bus::Client;
 pub use protocol::*;
 pub use shared_buffer::{DoubleBuffer, SharedBuffer};

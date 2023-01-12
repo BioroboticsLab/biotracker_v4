@@ -5,6 +5,7 @@ import robofish.io
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import sys
 
 message_bus = MessageBus()
 message_bus.subscribe('ENTITIES')
@@ -55,7 +56,7 @@ def record_experiment(message_bus):
         while True:
             (typ, msg) = message_bus.poll(-1)
             if typ == 'SHUTDOWN':
-                break
+                sys.exit(0)
             elif typ == 'ENTITIES':
                 entities_msg = tracking.Entities.FromString(msg)
                 add_observations(entities_msg.entities, recorded_entities, sample_count)
@@ -76,11 +77,8 @@ def record_experiment(message_bus):
 while True:
     (typ, msg) = message_bus.poll(-1)
     if typ == 'SHUTDOWN':
-        break
+        sys.exit(0)
     elif typ == 'VIDEO_ENCODER_COMMAND':
         cmd = video.VideoEncoderCommand.FromString(msg)
         if cmd.state is not None and cmd.state == video.VideoState.PLAYING:
             record_experiment(message_bus)
-
-
-record_experiment(message_bus)

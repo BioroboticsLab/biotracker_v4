@@ -1,18 +1,18 @@
 use anyhow::{anyhow, Result};
 use cv::prelude::*;
 use cv::videoio::VideoWriter;
-use libtracker::{message_bus::Client, protocol::*, CommandLineArguments, Component, SharedBuffer};
+use libtracker::{protocol::*, Client, CommandLineArguments, Component, SharedBuffer};
 use std::sync::Arc;
 
 pub struct VideoEncode {
     writer: VideoWriter,
     frame_number: u64,
-    state: VideoEncoderState,
 }
 
 pub struct VideoEncoder {
     msg_bus: Client,
     encode: Option<VideoEncode>,
+    recording_state: RecordingState,
 }
 
 impl Component for VideoEncoder {
@@ -21,30 +21,25 @@ impl Component for VideoEncoder {
         self.msg_bus.subscribe(&[
             MessageType::Image,
             MessageType::Shutdown,
-            MessageType::VideoEncoderCommand,
+            MessageType::ExperimentState,
         ])?;
         while let Some(message) = self.msg_bus.poll(-1)? {
             match message {
                 Message::Image(img) => self.process_image(img)?,
-                Message::VideoEncoderCommand(cmd) => {
-                    if let Some(settings) = cmd.settings {
+                Message::ExperimentState(experiment) => {
+                    if let Some(settings) = experiment.video_encoder_state {
                         self.initialize(settings)?;
-                        self.send_state_update()?;
                     }
-                    if let Some(state) = cmd.state {
-                        match VideoState::from_i32(state).unwrap() {
-                            VideoState::Playing | VideoState::Paused => {
-                                if let Some(encode) = &mut self.encode {
-                                    encode.state.state = state;
-                                    self.send_state_update()?;
-                                }
-                            }
-                            VideoState::Eos | VideoState::Stopped => self.finish()?,
-                        }
+                    self.recording_state =
+                        RecordingState::from_i32(experiment.recording_state).unwrap();
+                    if self.recording_state == RecordingState::Finished {
+                        self.finish()?;
+                        break;
                     }
                 }
                 Message::Shutdown => {
                     self.finish()?;
+                    break;
                 }
                 _ => {}
             }
@@ -58,15 +53,8 @@ impl VideoEncoder {
         Self {
             msg_bus,
             encode: None,
+            recording_state: Default::default(),
         }
-    }
-
-    pub fn send_state_update(&self) -> Result<()> {
-        if let Some(encode) = &self.encode {
-            self.msg_bus
-                .send(Message::VideoEncoderState(encode.state.clone()))?;
-        }
-        Ok(())
     }
 
     /// Initialize a VideoWriter and start encoding.
@@ -76,7 +64,7 @@ impl VideoEncoder {
             &settings.path,
             cv::videoio::VideoWriter::fourcc('m', 'p', '4', 'v')?,
             settings.fps,
-            cv::core::Size::new(2048, 2048),
+            cv::core::Size::new(settings.width, settings.height),
             true, // is_color
         )?;
         if !writer.is_opened()? {
@@ -88,16 +76,11 @@ impl VideoEncoder {
         self.encode = Some(VideoEncode {
             writer,
             frame_number: 0,
-            state: settings,
         });
         Ok(())
     }
 
     pub fn finish(&mut self) -> Result<()> {
-        if let Some(encode) = &mut self.encode {
-            encode.state.state = VideoState::Eos.into();
-            self.send_state_update()?;
-        }
         _ = self.encode.take();
         Ok(())
     }
@@ -107,7 +90,7 @@ impl VideoEncoder {
             return Ok(());
         }
         if let Some(encode) = &mut self.encode {
-            if VideoState::from_i32(encode.state.state).unwrap() != VideoState::Playing {
+            if self.recording_state != RecordingState::Recording {
                 return Ok(());
             }
             let image_buffer = SharedBuffer::open(&img.shm_id)?;

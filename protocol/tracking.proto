@@ -1,20 +1,6 @@
 syntax = "proto3";
 
-package biotracker.tracking;
-
-enum MessageType {
-  IMAGE = 0;
-  FEATURES = 1;
-  ENTITIES = 2;
-  VIDEO_DECODER_STATE = 3;
-  VIDEO_DECODER_COMMAND = 4;
-  VIDEO_ENCODER_STATE = 7;
-  VIDEO_ENCODER_COMMAND = 8;
-  SHUTDOWN = 5;
-  EXPERIMENT_STATE = 6;
-}
-
-message Shutdown {}
+package biotracker;
 
 message Image {
   string stream_id = 1;

@@ -1,8 +1,53 @@
 syntax = "proto3";
 
-package biotracker.experiment;
+package biotracker;
+
+import "video.proto";
+
+enum MessageType {
+  IMAGE = 0;
+  FEATURES = 1;
+  ENTITIES = 2;
+  EXPERIMENT_STATE = 6;
+  EXPERIMENT_UPDATE = 9;
+  SHUTDOWN = 5;
+}
+
+enum PlaybackState {
+  PLAYING = 0;
+  PAUSED = 1;
+  STOPPED = 2;
+  EOS = 3;
+}
+
+enum RecordingState {
+  INITIAL = 0;
+  RECORDING = 2;
+  FINISHED = 3;
+}
+
+message Shutdown {}
 
 message ExperimentState {
-  bool recording = 1;
+  PlaybackState playback_state = 8;
+  RecordingState recording_state = 1;
   uint32 entity_count = 2;
+  string project_directory = 3;
+  double target_fps = 4;
+  uint32 frame_number = 9;
+  optional uint32 frame_count = 6;
+  optional VideoDecoderState video_decoder_state = 7;
+  optional VideoEncoderState video_encoder_state = 5;
+}
+
+message ExperimentUpdate {
+  optional PlaybackState playback_state = 8;
+  optional RecordingState recording_state = 1;
+  optional uint32 entity_count = 2;
+  optional string project_directory = 3;
+  optional double fps = 4;
+  optional uint32 frame_number = 9;
+  optional uint32 frame_count = 6;
+  optional VideoDecoderState video_decoder_state = 7;
+  optional VideoEncoderState video_encoder_state = 5;
 }

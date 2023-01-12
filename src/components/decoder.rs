@@ -2,13 +2,17 @@ use anyhow::Result;
 use cv::prelude::*;
 use cv::videoio::VideoCapture;
 use libtracker::{
-    message_bus::Client, protocol::*, CommandLineArguments, Component, DoubleBuffer, SharedBuffer,
+    protocol::*, Client, CommandLineArguments, Component, DoubleBuffer, SharedBuffer,
 };
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 struct Playback {
-    state: VideoDecoderState,
+    width: u32,
+    height: u32,
+    frame_count: u32,
+    frame_number: u32,
+    fps: f64,
     sampler: Box<dyn VideoSampler>,
 }
 
@@ -17,6 +21,7 @@ pub struct VideoDecoder {
     buffer_manager: DoubleBuffer,
     last_frame_msg_sent: Instant,
     last_timestamp: u64,
+    experiment: ExperimentState,
     playback: Option<Playback>,
 }
 
@@ -28,27 +33,23 @@ trait VideoSampler {
 }
 
 impl Playback {
-    fn open_path(path: &str) -> Result<Playback> {
-        let mut video_capture = VideoCapture::from_file(path, 0)?;
+    fn open_path(settings: &VideoDecoderState, fps: f64) -> Result<Playback> {
+        let mut video_capture = VideoCapture::from_file(&settings.path, 0)?;
         let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u32;
         let frame_count = video_capture.get(cv::videoio::CAP_PROP_FRAME_COUNT)? as u32;
         let width = video_capture.get(cv::videoio::CAP_PROP_FRAME_WIDTH)? as u32;
         let height = video_capture.get(cv::videoio::CAP_PROP_FRAME_HEIGHT)? as u32;
-        let mut fps = video_capture.get(cv::videoio::CAP_PROP_FPS)?;
-        if fps == 0.0 {
-            fps = 30.0;
-            video_capture.set(cv::videoio::CAP_PROP_FPS, 30.0)?;
+        let mut cv_fps = video_capture.get(cv::videoio::CAP_PROP_FPS)?;
+        if cv_fps == 0.0 && fps > 0.0 {
+            video_capture.set(cv::videoio::CAP_PROP_FPS, fps)?;
+            cv_fps = fps;
         }
         Ok(Playback {
-            state: VideoDecoderState {
-                path: path.to_string(),
-                frame_number,
-                frame_count,
-                fps,
-                width,
-                height,
-                state: VideoState::Playing.into(),
-            },
+            width,
+            height,
+            frame_count,
+            frame_number,
+            fps: cv_fps,
             sampler: Box::new(video_capture),
         })
     }
@@ -87,12 +88,12 @@ impl VideoSampler for VideoCapture {
 impl Component for VideoDecoder {
     fn run(&mut self) -> Result<()> {
         self.msg_bus
-            .subscribe(&[MessageType::VideoDecoderCommand, MessageType::Features])?;
+            .subscribe(&[MessageType::ExperimentState, MessageType::Features])?;
         loop {
             while let Some(message) = self.msg_bus.poll(-1)? {
                 match message {
-                    Message::VideoDecoderCommand(cmd) => {
-                        self.handle_command(cmd)?;
+                    Message::ExperimentState(experiment) => {
+                        self.update_experiment(experiment)?;
                         break;
                     }
                     Message::Features(features_msg) => {
@@ -116,59 +117,66 @@ impl VideoDecoder {
             buffer_manager,
             last_frame_msg_sent: Instant::now(),
             last_timestamp: 0,
+            experiment: ExperimentState::default(),
             playback: None,
         }
     }
 
-    fn handle_command(&mut self, cmd: VideoDecoderCommand) -> Result<()> {
-        if let Some(path) = cmd.path {
-            self.playback = Some(Playback::open_path(&path)?);
-        }
-        if let Some(playback) = &mut self.playback {
-            if let Some(state) = cmd.state {
-                playback.state.state = state;
+    fn update_experiment(&mut self, experiment: ExperimentState) -> Result<()> {
+        if let Some(decoder_state) = &experiment.video_decoder_state {
+            if self.playback.is_none() {
+                let playback = Playback::open_path(decoder_state, experiment.target_fps)?;
+                let frame_count = match playback.frame_count {
+                    0 => None,
+                    n => Some(n),
+                };
+                self.msg_bus
+                    .send(Message::ExperimentUpdate(ExperimentUpdate {
+                        frame_count,
+                        video_decoder_state: Some(VideoDecoderState {
+                            path: decoder_state.path.clone(),
+                            width: playback.width,
+                            height: playback.height,
+                            fps: playback.fps,
+                        }),
+                        ..Default::default()
+                    }))?;
+                self.playback = Some(playback);
             }
-            if let Some(fps) = cmd.fps {
-                playback.state.fps = fps;
-            }
-            if let Some(frame_number) = cmd.frame_number {
-                playback.sampler.seek(frame_number)?;
-                playback.state.frame_number = frame_number;
-            }
-            self.send_state_update()?;
         }
-        Ok(())
-    }
-
-    fn send_state_update(&self) -> Result<()> {
-        if let Some(Playback { state, sampler: _ }) = &self.playback {
-            self.msg_bus
-                .send(Message::VideoDecoderState(state.clone()))?;
-        }
+        self.experiment = experiment;
         Ok(())
     }
 
     fn next_frame(&mut self) -> Result<()> {
         loop {
-            if let Some(Playback { state, sampler }) = &mut self.playback {
-                if VideoState::from_i32(state.state) == Some(VideoState::Playing) {
-                    let next_msg_deadline =
-                        self.last_frame_msg_sent + Duration::from_secs_f64(1.0 / state.fps);
+            if let Some(Playback {
+                width: _,
+                height: _,
+                frame_count: _,
+                frame_number,
+                fps: _,
+                sampler,
+            }) = &mut self.playback
+            {
+                if PlaybackState::from_i32(self.experiment.playback_state)
+                    == Some(PlaybackState::Playing)
+                    && self.experiment.target_fps > 0.0
+                {
+                    let next_msg_deadline = self.last_frame_msg_sent
+                        + Duration::from_secs_f64(1.0 / self.experiment.target_fps);
                     self.last_frame_msg_sent = next_msg_deadline;
                     let now = Instant::now();
                     if now < next_msg_deadline {
                         std::thread::sleep(next_msg_deadline - now);
                     }
-                    let timestamp = ((state.frame_number as f64 / state.fps) * 1e9) as u64;
+                    let timestamp =
+                        ((*frame_number as f64 / self.experiment.target_fps) * 1e9) as u64;
                     let (image_buffer, image) = sampler.get_frame(timestamp)?;
                     self.buffer_manager.push(image_buffer);
                     self.last_timestamp = image.timestamp;
                     self.msg_bus.send(Message::Image(image))?;
-                    state.frame_number += 1;
-                    if state.frame_count > 0 && state.frame_number >= state.frame_count {
-                        state.state = VideoState::Eos.into();
-                        self.send_state_update()?;
-                    }
+                    *frame_number += 1;
                 }
             }
             return Ok(());

@@ -23,7 +23,7 @@ fn main() {
         }
     }
 
-    let mut component_core = Core::new(&args).unwrap();
+    let component_core = Core::new(&args).unwrap();
     component_core.start().unwrap();
 
     let options = eframe::NativeOptions {

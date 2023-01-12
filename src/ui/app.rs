@@ -10,12 +10,6 @@ pub struct PersistentState {
     pub scaling: f32,
 }
 
-pub struct ComponentState {
-    pub decoder: Option<VideoDecoderState>,
-    pub encoder: Option<VideoEncoderState>,
-    pub experiment: ExperimentState,
-}
-
 pub struct BioTrackerUI {
     persistent_state: PersistentState,
     msg_bus: Client,
@@ -29,7 +23,7 @@ pub struct BioTrackerUI {
     onscreen_id: egui::TextureId,
     offscreen_id: egui::TextureId,
     entities_received: bool,
-    component_state: ComponentState,
+    experiment: ExperimentState,
 }
 
 impl BioTrackerUI {
@@ -45,11 +39,10 @@ impl BioTrackerUI {
         let msg_bus = Client::new().unwrap();
         msg_bus
             .subscribe(&[
-                MessageType::VideoDecoderState,
-                MessageType::VideoEncoderState,
                 MessageType::Image,
                 MessageType::Features,
                 MessageType::Entities,
+                MessageType::ExperimentState,
             ])
             .unwrap();
 
@@ -73,19 +66,19 @@ impl BioTrackerUI {
             onscreen_id: egui::epaint::TextureId::default(),
             offscreen_id: egui::epaint::TextureId::default(),
             entities_received: false,
-            component_state: ComponentState {
-                decoder: None,
-                encoder: None,
-                experiment: ExperimentState::default(),
-            },
+            experiment: ExperimentState::default(),
         })
     }
 
     fn open_video(&self, path: String) {
-        let mut cmd = VideoDecoderCommand::default();
-        cmd.path = Some(path);
         self.msg_bus
-            .send(Message::VideoDecoderCommand(cmd))
+            .send(Message::ExperimentUpdate(ExperimentUpdate {
+                video_decoder_state: Some(VideoDecoderState {
+                    path: path.clone(),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }))
             .unwrap();
     }
 
@@ -102,7 +95,7 @@ impl BioTrackerUI {
 
 impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let mut cmd = VideoDecoderCommand::default();
+        let mut cmd = ExperimentUpdate::default();
         let zoom_delta = ctx.input().zoom_delta();
         if zoom_delta != 1.0 {
             self.video_scale = 0.1f32.max(self.video_scale * zoom_delta);
@@ -122,15 +115,8 @@ impl eframe::App for BioTrackerUI {
                     self.entities_received = true;
                     self.video_plane.update_entities(entities);
                 }
-                Message::VideoDecoderState(decoder_state) => {
-                    self.component_state.decoder = Some(decoder_state);
-                }
-                Message::VideoEncoderState(encoder_state) => {
-                    if VideoState::from_i32(encoder_state.state).unwrap() == VideoState::Eos {
-                        self.component_state.encoder = None;
-                    } else {
-                        self.component_state.encoder = Some(encoder_state);
-                    }
+                Message::ExperimentState(experiment) => {
+                    self.experiment = experiment;
                 }
                 _ => eprintln!("Unexpected message {:?}", msg),
             }
@@ -201,13 +187,14 @@ impl eframe::App for BioTrackerUI {
 
             egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    if let Some(decoder_state) = &self.component_state.decoder {
-                        let (toggle_state, icon) = match VideoState::from_i32(decoder_state.state) {
-                            Some(VideoState::Playing) => (VideoState::Paused, "⏸"),
-                            _ => (VideoState::Playing, "▶"),
-                        };
+                    if let Some(_decoder_state) = &self.experiment.video_decoder_state {
+                        let (toggle_state, icon) =
+                            match PlaybackState::from_i32(self.experiment.playback_state) {
+                                Some(PlaybackState::Playing) => (PlaybackState::Paused, "⏸"),
+                                _ => (PlaybackState::Playing, "▶"),
+                            };
                         if ui.add(egui::Button::new(icon)).clicked() {
-                            cmd.set_state(toggle_state);
+                            cmd.playback_state = Some(toggle_state.into());
                         }
 
                         let available_size = ui.available_size_before_wrap();
@@ -216,22 +203,26 @@ impl eframe::App for BioTrackerUI {
 
                         ui.label(&self.current_timestamp.to_string());
                         ui.spacing_mut().slider_width = slider_size.x;
-                        if decoder_state.frame_count > 0 {
-                            let response = ui.add(
-                                egui::Slider::new(
-                                    &mut self.seek_framenumber,
-                                    0..=decoder_state.frame_count,
-                                )
-                                .show_value(false),
-                            );
-                            if response.drag_released()
-                                || response.lost_focus()
-                                || response.changed()
-                            {
-                                cmd.frame_number = Some(self.seek_framenumber);
-                            }
+                        if let Some(frame_count) = self.experiment.frame_count {
+                            if frame_count > 0 {
+                                let response = ui.add(
+                                    egui::Slider::new(&mut self.seek_framenumber, 0..=frame_count)
+                                        .show_value(false),
+                                );
+                                if response.drag_released()
+                                    || response.lost_focus()
+                                    || response.changed()
+                                {
+                                    // FIXME
+                                    cmd.frame_number = Some(self.seek_framenumber);
+                                }
 
-                            ui.label(&decoder_state.frame_number.to_string());
+                                ui.label(&self.experiment.frame_number.to_string());
+                            }
+                        }
+                    } else {
+                        if ui.add(egui::Button::new("▶")).clicked() {
+                            self.filemenu();
                         }
                     }
                 });
@@ -240,7 +231,7 @@ impl eframe::App for BioTrackerUI {
             self.side_panel.show(
                 ctx,
                 &mut self.msg_bus,
-                &mut self.component_state,
+                &mut self.experiment,
                 &mut self.persistent_state,
                 &mut self.video_plane,
             );
@@ -267,14 +258,8 @@ impl eframe::App for BioTrackerUI {
                     });
                 });
             }
-            if cmd.path.is_some()
-                || cmd.frame_number.is_some()
-                || cmd.fps.is_some()
-                || cmd.state.is_some()
-            {
-                self.msg_bus
-                    .send(Message::VideoDecoderCommand(cmd))
-                    .unwrap();
+            if cmd.frame_number.is_some() || cmd.playback_state.is_some() {
+                self.msg_bus.send(Message::ExperimentUpdate(cmd)).unwrap();
             }
             ctx.request_repaint();
         }
