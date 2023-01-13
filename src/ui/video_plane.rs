@@ -43,7 +43,12 @@ impl VideoPlane {
         to_screen: &egui::emath::RectTransform,
         feature: &Feature,
         color: egui::Color32,
+        scale: Option<f32>,
     ) {
+        let scale = match scale {
+            Some(x) => x,
+            None => 1.0,
+        };
         let nodes = &feature.nodes;
         if let Some(skeleton) = &self.skeleton {
             for edge in &skeleton.edges {
@@ -54,7 +59,10 @@ impl VideoPlane {
                 if from.any_nan() || to.any_nan() {
                     continue;
                 }
-                painter.line_segment([from, to], egui::Stroke::new(2.0, egui::Color32::BLACK));
+                painter.line_segment(
+                    [from, to],
+                    egui::Stroke::new(2.0 * scale, egui::Color32::BLACK),
+                );
             }
         }
         for node in nodes {
@@ -64,7 +72,7 @@ impl VideoPlane {
             }
             painter.circle(
                 point,
-                5.0,
+                5.0 * scale,
                 color,
                 egui::Stroke::new(1.0, egui::Color32::BLACK),
             )
@@ -113,7 +121,7 @@ impl VideoPlane {
         if let Some(features) = &self.last_features {
             if self.draw_features {
                 for feature in &features.features {
-                    self.paint_feature(&painter, &to_screen, feature, egui::Color32::GREEN);
+                    self.paint_feature(&painter, &to_screen, feature, egui::Color32::GREEN, scale);
                 }
             }
         }
@@ -121,7 +129,7 @@ impl VideoPlane {
             if self.draw_entities {
                 for (uuid, feature) in &entities.entities {
                     let color = self.color_palette.pick(&uuid);
-                    self.paint_feature(&painter, &to_screen, feature, color);
+                    self.paint_feature(&painter, &to_screen, feature, color, scale);
                 }
             }
         }
