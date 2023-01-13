@@ -16,13 +16,8 @@ message Feature {
     float y = 2;
     float score = 3;
   }
-  message SkeletonEdge {
-    uint32 from = 1;
-    uint32 to = 2;
-  }
-    repeated SkeletonNode nodes = 1;
-    repeated SkeletonEdge edges = 2;
-    float score = 3;
+  repeated SkeletonNode nodes = 1;
+  float score = 3;
 }
 
 message Features {
@@ -33,4 +28,14 @@ message Features {
 message Entities {
   uint64 timestamp = 1;
   map<string, Feature> entities = 2;
+}
+
+message SkeletonDescriptor {
+  message SkeletonEdge {
+    uint32 source = 1;
+    uint32 target = 2;
+  }
+  repeated SkeletonEdge edges = 1;
+  repeated string node_names = 2;
+  optional string center_node = 3;
 }

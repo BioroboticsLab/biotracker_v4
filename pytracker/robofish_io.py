@@ -1,6 +1,6 @@
 from biotracker.message_bus import MessageBus
-import biotracker.tracking_pb2 as tracking
-import biotracker.video_pb2 as video
+import tracking_pb2 as tracking
+import video_pb2 as video
 import robofish.io
 import numpy as np
 import matplotlib.pyplot as plt

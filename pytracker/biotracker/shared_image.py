@@ -1,9 +1,8 @@
-from .tracking_pb2 import Image
 from multiprocessing.shared_memory import SharedMemory, resource_tracker
 import numpy as np
 
 class SharedImage:
-    def __init__(self, img: Image):
+    def __init__(self, img):
         self.size = img.width * img.height * 4
         self.shm = SharedMemory(img.shm_id, size=self.size, create=False)
         # Don't track this memory, it gets cleaned up by the BioTracker

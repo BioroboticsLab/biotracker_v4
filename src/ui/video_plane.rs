@@ -2,11 +2,12 @@ use super::{
     color::{Palette, ALPHABET},
     texture::Texture,
 };
-use libtracker::{Entities, Feature, Features};
+use libtracker::{Entities, Feature, Features, SkeletonDescriptor};
 
 pub struct VideoPlane {
     last_features: Option<Features>,
     last_entities: Option<Entities>,
+    skeleton: Option<SkeletonDescriptor>,
     color_palette: Palette,
     draw_features: bool,
     draw_entities: bool,
@@ -17,6 +18,7 @@ impl VideoPlane {
         Self {
             last_features: None,
             last_entities: None,
+            skeleton: None,
             color_palette: Palette { colors: &ALPHABET },
             draw_features: false,
             draw_entities: true,
@@ -31,6 +33,10 @@ impl VideoPlane {
         self.last_entities = Some(entities);
     }
 
+    pub fn update_skeleton(&mut self, skeleton: &Option<SkeletonDescriptor>) {
+        self.skeleton = skeleton.clone();
+    }
+
     fn paint_feature(
         &self,
         painter: &egui::Painter,
@@ -38,16 +44,18 @@ impl VideoPlane {
         feature: &Feature,
         color: egui::Color32,
     ) {
-        let (nodes, edges) = (&feature.nodes, &feature.edges);
-        for edge in edges {
-            let from_idx = edge.from as usize;
-            let to_idx = edge.to as usize;
-            let from = to_screen * egui::pos2(nodes[from_idx].x, nodes[from_idx].y);
-            let to = to_screen * egui::pos2(nodes[to_idx].x, nodes[to_idx].y);
-            if from.any_nan() || to.any_nan() {
-                continue;
+        let nodes = &feature.nodes;
+        if let Some(skeleton) = &self.skeleton {
+            for edge in &skeleton.edges {
+                let from_idx = edge.source as usize;
+                let to_idx = edge.target as usize;
+                let from = to_screen * egui::pos2(nodes[from_idx].x, nodes[from_idx].y);
+                let to = to_screen * egui::pos2(nodes[to_idx].x, nodes[to_idx].y);
+                if from.any_nan() || to.any_nan() {
+                    continue;
+                }
+                painter.line_segment([from, to], egui::Stroke::new(2.0, egui::Color32::BLACK));
             }
-            painter.line_segment([from, to], egui::Stroke::new(2.0, egui::Color32::BLACK));
         }
         for node in nodes {
             let point = to_screen * egui::pos2(node.x, node.y);

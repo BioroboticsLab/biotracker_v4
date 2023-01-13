@@ -132,6 +132,9 @@ impl Core {
                 if let Some(encoder_state) = &update.video_encoder_state {
                     self.experiment.video_encoder_state = Some(encoder_state.clone());
                 }
+                if let Some(skeleton_descriptor) = &update.skeleton_descriptor {
+                    self.experiment.skeleton_descriptor = Some(skeleton_descriptor.clone());
+                }
             }
             _ => return Err(anyhow!("invalid message type: {:?}", msg))?,
         }

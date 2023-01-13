@@ -3,6 +3,7 @@ syntax = "proto3";
 package biotracker;
 
 import "video.proto";
+import "tracking.proto";
 
 enum MessageType {
   IMAGE = 0;
@@ -38,6 +39,7 @@ message ExperimentState {
   optional uint32 frame_count = 6;
   optional VideoDecoderState video_decoder_state = 7;
   optional VideoEncoderState video_encoder_state = 5;
+  optional SkeletonDescriptor skeleton_descriptor = 10;
 }
 
 message ExperimentUpdate {
@@ -50,4 +52,5 @@ message ExperimentUpdate {
   optional uint32 frame_count = 6;
   optional VideoDecoderState video_decoder_state = 7;
   optional VideoEncoderState video_encoder_state = 5;
+  optional SkeletonDescriptor skeleton_descriptor = 10;
 }

@@ -116,6 +116,8 @@ impl eframe::App for BioTrackerUI {
                     self.video_plane.update_entities(entities);
                 }
                 Message::ExperimentState(experiment) => {
+                    self.video_plane
+                        .update_skeleton(&experiment.skeleton_descriptor);
                     self.experiment = experiment;
                 }
                 _ => eprintln!("Unexpected message {:?}", msg),
