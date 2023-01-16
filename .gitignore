@@ -4,6 +4,6 @@ target/
 Cargo.lock
 __pycache__/
 TODO
-**_pb2.py
+pytracker/biotracker/biotracker/**
 **.mp4
 **.hdf5

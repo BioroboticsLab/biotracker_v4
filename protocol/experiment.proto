@@ -3,54 +3,50 @@ syntax = "proto3";
 package biotracker;
 
 import "video.proto";
-import "tracking.proto";
-
-enum MessageType {
-  IMAGE = 0;
-  FEATURES = 1;
-  ENTITIES = 2;
-  EXPERIMENT_STATE = 6;
-  EXPERIMENT_UPDATE = 9;
-  SHUTDOWN = 5;
-}
-
-enum PlaybackState {
-  PLAYING = 0;
-  PAUSED = 1;
-  STOPPED = 2;
-  EOS = 3;
-}
-
-enum RecordingState {
-  INITIAL = 0;
-  RECORDING = 2;
-  FINISHED = 3;
-}
 
 message Shutdown {}
 
-message ExperimentState {
-  PlaybackState playback_state = 8;
-  RecordingState recording_state = 1;
-  uint32 entity_count = 2;
-  string project_directory = 3;
-  double target_fps = 4;
-  uint32 frame_number = 9;
-  optional uint32 frame_count = 6;
-  optional VideoDecoderState video_decoder_state = 7;
-  optional VideoEncoderState video_encoder_state = 5;
-  optional SkeletonDescriptor skeleton_descriptor = 10;
+enum ComponentType {
+  BIOTRACKER_CORE = 0;
+  ENTITY_MATCHER = 1;
+  FEATURE_DETECTOR = 2;
+  RECORDER = 3;
 }
 
-message ExperimentUpdate {
-  optional PlaybackState playback_state = 8;
-  optional RecordingState recording_state = 1;
-  optional uint32 entity_count = 2;
-  optional string project_directory = 3;
-  optional double fps = 4;
-  optional uint32 frame_number = 9;
-  optional uint32 frame_count = 6;
-  optional VideoDecoderState video_decoder_state = 7;
-  optional VideoEncoderState video_encoder_state = 5;
-  optional SkeletonDescriptor skeleton_descriptor = 10;
+message Component {
+  string id = 1;
+  ComponentType typ = 2;
+}
+
+message ComponentMessage {
+  string recipient_id = 1;
+  oneof content {
+    Component registration = 2;
+    string config_json = 3;
+    string command_json = 4;
+  }
+}
+
+message Arena {
+  uint32 width_cm = 3;
+  uint32 height_cm = 4;
+}
+
+message VideoInfo {
+  string path = 1;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 frame_count = 2;
+  double fps = 5;
+}
+
+message ExperimentState {
+  string base_directory = 6;
+  Arena arena = 4;
+  PlaybackState playback_state = 5;
+  RecordingState recording_state = 1;
+  uint32 entity_count = 3;
+  double target_fps = 2;
+  optional VideoInfo video_info = 9;
+  repeated Component registered_components = 7;
 }

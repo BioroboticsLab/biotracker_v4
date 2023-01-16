@@ -1,6 +1,8 @@
+use crate::components::biotracker::BioTrackerCommand;
+
+use super::annotated_video::AnnotatedVideo;
 use super::app::PersistentState;
-use super::video_plane::VideoPlane;
-use libtracker::{message_bus::Client, protocol::*};
+use libtracker::protocol::*;
 
 pub struct SidePanel {}
 
@@ -12,28 +14,19 @@ impl SidePanel {
     pub fn show(
         &mut self,
         ctx: &egui::Context,
-        msg_bus: &mut Client,
         experiment: &mut ExperimentState,
         persistent_state: &mut PersistentState,
-        video_plane: &mut VideoPlane,
-    ) {
+        video_view: &mut AnnotatedVideo,
+    ) -> Option<BioTrackerCommand> {
+        let mut command = None;
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.collapsing("Experiment", |ui| {
-                    let mut new_entity_count = experiment.entity_count;
                     if ui.button("Add Entity").clicked() {
-                        new_entity_count += 1;
+                        command = Some(BioTrackerCommand::AddEntity);
                     }
-                    if ui.button("Remove Entity").clicked() && experiment.entity_count > 0 {
-                        new_entity_count -= 1;
-                    }
-                    if new_entity_count != experiment.entity_count {
-                        msg_bus
-                            .send(Message::ExperimentUpdate(ExperimentUpdate {
-                                entity_count: Some(new_entity_count),
-                                ..Default::default()
-                            }))
-                            .unwrap();
+                    if ui.button("Remove Entity").clicked() {
+                        command = Some(BioTrackerCommand::RemoveEntity);
                     }
                 });
             });
@@ -49,48 +42,25 @@ impl SidePanel {
                 }
             });
             ui.collapsing("Video", |ui| {
-                video_plane.show_settings(ui);
+                video_view.show_settings(ui);
             });
-            ui.collapsing("Video Recorder", |ui| {
-                match experiment.video_encoder_state.as_ref() {
-                    Some(state) => {
-                        ui.label(format!("Recording to {}", state.path));
+            ui.collapsing("Recording", |ui| {
+                match RecordingState::from_i32(experiment.recording_state).unwrap() {
+                    RecordingState::Initial | RecordingState::Finished => {
+                        if ui.button("Start Recording").clicked() {
+                            command =
+                                Some(BioTrackerCommand::RecordingState(RecordingState::Recording));
+                        }
                     }
-                    None => {
-                        ui.label("Video Encoder not running");
+                    RecordingState::Recording => {
+                        if ui.button("Stop Recording").clicked() {
+                            command =
+                                Some(BioTrackerCommand::RecordingState(RecordingState::Finished));
+                        }
                     }
                 }
-
-                //match (&component_state.decoder, &mut component_state.encoder) {
-                //(Some(_decoder), Some(_encoder)) => {
-                //if ui.button("Stop Recording").clicked() {
-                //let cmd = VideoEncoderCommand {
-                //state: Some(VideoState::Stopped.into()),
-                //..Default::default()
-                //};
-                //msg_bus.send(Message::VideoEncoderCommand(cmd)).unwrap();
-                //}
-                //}
-                //(Some(decoder), None) => {
-                //if ui.button("Start Recording").clicked() {
-                //let cmd = VideoEncoderCommand {
-                //settings: Some(VideoEncoderState {
-                //path: "test.mp4".to_string(),
-                //width: decoder.width,
-                //height: decoder.height,
-                //fps: decoder.fps,
-                //state: VideoState::Playing.into(),
-                //}),
-                //state: None,
-                //};
-                //msg_bus.send(Message::VideoEncoderCommand(cmd)).unwrap();
-                //}
-                //}
-                //(None, _) => {
-                //ui.label("No video source found");
-                //}
-                //}
             });
         });
+        command
     }
 }

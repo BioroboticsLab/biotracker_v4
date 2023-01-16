@@ -2,39 +2,35 @@ syntax = "proto3";
 
 package biotracker;
 
-message Image {
-  string stream_id = 1;
-  uint64 timestamp = 2;
-  string shm_id = 3;
-  uint32 width = 4;
-  uint32 height = 5;
-}
-
 message Feature {
-  message SkeletonNode {
-    float x = 1;
-    float y = 2;
-    float score = 3;
-  }
-  repeated SkeletonNode nodes = 1;
+  repeated SkeletonNode nodes = 2;
   float score = 3;
 }
 
 message Features {
   uint64 timestamp = 1;
   repeated Feature features = 2;
+  SkeletonDescriptor skeleton = 3;
 }
 
 message Entities {
   uint64 timestamp = 1;
   map<string, Feature> entities = 2;
+  SkeletonDescriptor skeleton = 3;
+}
+
+message SkeletonNode {
+  float x = 1;
+  float y = 2;
+  float score = 3;
+}
+
+message SkeletonEdge {
+  uint32 source = 1;
+  uint32 target = 2;
 }
 
 message SkeletonDescriptor {
-  message SkeletonEdge {
-    uint32 source = 1;
-    uint32 target = 2;
-  }
   repeated SkeletonEdge edges = 1;
   repeated string node_names = 2;
   optional string center_node = 3;

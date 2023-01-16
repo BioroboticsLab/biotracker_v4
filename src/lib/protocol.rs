@@ -3,31 +3,32 @@ use std::fmt::Debug;
 
 include!(concat!(env!("OUT_DIR"), "/biotracker.rs"));
 
-// converts all MessageType and corresponding Messages to a rust enum. Shutdown is a special case,
-// since we don't care about it's Message.
-macro_rules! message_enum {
-    ($($name:ident),*) => {
-        #[derive(Debug, Clone)]
-        pub enum Message {
-            Shutdown,
-            $($name($name)),*
-        }
+pub use bio_tracker_message::Content as Message;
 
-        impl Message {
-            pub fn deserialize(ty: MessageType, buf: &[u8]) -> Result<Self, prost::DecodeError> {
-                match ty {
-                    MessageType::Shutdown => Ok(Message::Shutdown),
-                    $(MessageType::$name => Ok(Message::$name($name::decode(buf)?))),*
-                }
-            }
-
-            pub fn serialize(&self) -> (MessageType, Vec<u8>) {
-                match self {
-                    Message::Shutdown => (MessageType::Shutdown, vec![]),
-                    $(Message::$name(msg) => (MessageType::$name, msg.encode_to_vec())),*
-                }
-            }
+impl Message {
+    pub fn topic(&self) -> (Topic, Option<&String>) {
+        match self {
+            Message::Image(img) => (Topic::Image, Some(&img.stream_id)),
+            Message::Features(_) => (Topic::Features, None),
+            Message::Entities(_) => (Topic::Entities, None),
+            Message::ExperimentState(_) => (Topic::ExperimentState, None),
+            Message::ComponentMessage(msg) => (Topic::ComponentMessage, Some(&msg.recipient_id)),
+            Message::Shutdown(_) => (Topic::Shutdown, None),
         }
     }
+
+    pub fn serialize(self) -> (String, Vec<u8>) {
+        let (topic, topic_suffix) = self.topic();
+        let topic_string = match topic_suffix {
+            Some(suffix) => format!("{}.{}", topic.as_str_name(), suffix),
+            None => format!("{}", topic.as_str_name()),
+        };
+
+        let buf = BioTrackerMessage {
+            topic: topic as i32,
+            content: Some(self),
+        }
+        .encode_to_vec();
+        (topic_string, buf)
+    }
 }
-message_enum!(Image, Features, Entities, ExperimentState, ExperimentUpdate);

@@ -1,114 +1,111 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use cv::prelude::*;
 use cv::videoio::VideoWriter;
-use libtracker::{protocol::*, Client, CommandLineArguments, Component, SharedBuffer};
-use std::sync::Arc;
+use libtracker::{protocol::*, Client, Component, SharedBuffer};
+use serde::{Deserialize, Serialize};
 
-pub struct VideoEncode {
-    writer: VideoWriter,
-    frame_number: u64,
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VideoEncoderConfig {
+    pub video_path: String,
+    pub fps: f64,
+    pub width: u32,
+    pub height: u32,
+    pub image_stream_id: String,
 }
 
 pub struct VideoEncoder {
     msg_bus: Client,
-    encode: Option<VideoEncode>,
     recording_state: RecordingState,
+    video_writer: Option<VideoWriter>,
 }
 
 impl Component for VideoEncoder {
-    /// Get images from the message bus and encode them into a video.
     fn run(&mut self) -> Result<()> {
-        self.msg_bus.subscribe(&[
-            MessageType::Image,
-            MessageType::Shutdown,
-            MessageType::ExperimentState,
-        ])?;
-        while let Some(message) = self.msg_bus.poll(-1)? {
-            match message {
-                Message::Image(img) => self.process_image(img)?,
-                Message::ExperimentState(experiment) => {
-                    if let Some(settings) = experiment.video_encoder_state {
-                        self.initialize(settings)?;
+        self.msg_bus
+            .subscribe(&[Topic::ExperimentState, Topic::Shutdown])?;
+        loop {
+            while let Some(message) = self.msg_bus.poll(-1)? {
+                match message {
+                    Message::ComponentMessage(msg) => match msg.content {
+                        Some(component_message::Content::ConfigJson(config)) => {
+                            self.initialize(serde_json::from_str(&config)?)?;
+                        }
+                        _ => {}
+                    },
+                    Message::ExperimentState(state) => {
+                        self.recording_state =
+                            RecordingState::from_i32(state.recording_state).unwrap();
+                        if self.recording_state == RecordingState::Finished {
+                            self.video_writer = None;
+                        }
                     }
-                    self.recording_state =
-                        RecordingState::from_i32(experiment.recording_state).unwrap();
-                    if self.recording_state == RecordingState::Finished {
-                        self.finish()?;
-                        break;
+                    Message::Image(image) => {
+                        eprintln!("Received image");
+                        if self.recording_state == RecordingState::Recording {
+                            if let Some(writer) = &mut self.video_writer {
+                                eprintln!("Recording image");
+                                VideoEncoder::record_frame(image, writer)?;
+                            }
+                        }
                     }
+                    Message::Shutdown(_) => {
+                        self.video_writer = None;
+                        return Ok(());
+                    }
+                    _ => panic!("Encoder: Unexpected message: {:?}", message),
                 }
-                Message::Shutdown => {
-                    self.finish()?;
-                    break;
-                }
-                _ => {}
             }
         }
-        Ok(())
     }
 }
 
 impl VideoEncoder {
-    pub fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+    pub fn new(msg_bus: Client) -> Self {
+        msg_bus
+            .register_component(libtracker::protocol::Component {
+                id: "VideoEncoder".to_owned(),
+                typ: ComponentType::Recorder as i32,
+            })
+            .unwrap();
         Self {
             msg_bus,
-            encode: None,
-            recording_state: Default::default(),
+            video_writer: None,
+            recording_state: RecordingState::Initial,
         }
     }
 
-    /// Initialize a VideoWriter and start encoding.
-    pub fn initialize(&mut self, settings: VideoEncoderState) -> Result<()> {
-        assert!(self.encode.is_none());
+    fn record_frame(image: Image, writer: &mut VideoWriter) -> Result<()> {
+        let image_buffer = SharedBuffer::open(&image.shm_id)?;
+        let cv_image = unsafe {
+            let data = image_buffer.as_slice();
+            let cv_image = Mat::new_nd_with_data(
+                &[image.width as i32, image.height as i32],
+                cv::core::CV_8UC4,
+                data.as_ptr() as *mut std::ffi::c_void,
+                None,
+            )?;
+            cv_image
+        };
+        let mut image_bgr = Mat::default();
+        cv::imgproc::cvt_color(&cv_image, &mut image_bgr, cv::imgproc::COLOR_RGBA2BGR, 0)?;
+        writer.write(&image_bgr)?;
+        Ok(())
+    }
+
+    fn initialize(&mut self, config: VideoEncoderConfig) -> Result<()> {
         let writer = VideoWriter::new(
-            &settings.path,
+            &config.video_path,
             cv::videoio::VideoWriter::fourcc('m', 'p', '4', 'v')?,
-            settings.fps,
-            cv::core::Size::new(settings.width, settings.height),
+            config.fps,
+            cv::core::Size::new(config.width as i32, config.height as i32),
             true, // is_color
         )?;
         if !writer.is_opened()? {
-            return Err(anyhow!(
-                "Failed to open video writer with settings: {:?}",
-                settings
-            ));
-        }
-        self.encode = Some(VideoEncode {
-            writer,
-            frame_number: 0,
-        });
-        Ok(())
-    }
-
-    pub fn finish(&mut self) -> Result<()> {
-        _ = self.encode.take();
-        Ok(())
-    }
-
-    pub fn process_image(&mut self, img: Image) -> Result<()> {
-        if img.stream_id != "Annotated" {
+            eprintln!("Failed to open video writer with settings: {:?}", config);
             return Ok(());
         }
-        if let Some(encode) = &mut self.encode {
-            if self.recording_state != RecordingState::Recording {
-                return Ok(());
-            }
-            let image_buffer = SharedBuffer::open(&img.shm_id)?;
-            let cv_img = unsafe {
-                let data = image_buffer.as_slice();
-                let cv_img = Mat::new_nd_with_data(
-                    &[img.width as i32, img.height as i32],
-                    cv::core::CV_8UC4,
-                    data.as_ptr() as *mut std::ffi::c_void,
-                    None,
-                )?;
-                cv_img
-            };
-            let mut img_bgr = Mat::default();
-            cv::imgproc::cvt_color(&cv_img, &mut img_bgr, cv::imgproc::COLOR_RGBA2BGR, 0)?;
-            encode.writer.write(&img_bgr)?;
-            encode.frame_number += 1;
-        }
+        self.video_writer = Some(writer);
+        self.msg_bus.subscribe_image(&config.image_stream_id)?;
         Ok(())
     }
 }

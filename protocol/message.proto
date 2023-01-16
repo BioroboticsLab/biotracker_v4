@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package biotracker;
+
+import "tracking.proto";
+import "experiment.proto";
+import "video.proto";
+
+enum Topic {
+    IMAGE = 0;
+    FEATURES = 1;
+    ENTITIES = 2;
+    EXPERIMENT_STATE = 3;
+    COMPONENT_MESSAGE = 4;
+    SHUTDOWN = 5;
+}
+
+message BioTrackerMessage {
+    Topic topic = 7;
+    oneof content {
+        Image image = 1;
+        Features features = 2;
+        Entities entities = 3;
+        ExperimentState experiment_state = 4;
+        ComponentMessage component_message = 5;
+        Shutdown shutdown = 6;
+    }
+}

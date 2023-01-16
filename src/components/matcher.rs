@@ -1,9 +1,8 @@
 use anyhow::{anyhow, Result};
-use libtracker::{protocol::*, Client, CommandLineArguments, Component};
+use libtracker::{protocol::*, Client, Component};
 use pathfinding::{kuhn_munkres::kuhn_munkres_min, matrix::Matrix};
 use rand::Rng;
 use std::collections::HashMap;
-use std::sync::Arc;
 
 #[derive(Debug)]
 struct MatchedEntity {
@@ -21,7 +20,7 @@ pub struct Matcher {
 impl Component for Matcher {
     fn run(&mut self) -> Result<()> {
         self.msg_bus
-            .subscribe(&[MessageType::Features, MessageType::ExperimentState])?;
+            .subscribe(&[Topic::Features, Topic::ExperimentState])?;
         while let Some(message) = self.msg_bus.poll(-1)? {
             match message {
                 Message::Features(mut features_msg) => {
@@ -41,7 +40,7 @@ impl Component for Matcher {
 }
 
 impl Matcher {
-    pub fn new(msg_bus: Client, _args: Arc<CommandLineArguments>) -> Self {
+    pub fn new(msg_bus: Client) -> Self {
         Self {
             msg_bus,
             last_matching: vec![],
@@ -126,6 +125,7 @@ impl Matcher {
         Entities {
             timestamp,
             entities: entities_map,
+            skeleton: features_msg.skeleton.clone(),
         }
     }
 }

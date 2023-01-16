@@ -1,5 +1,5 @@
 use clap::Parser;
-use components::Core;
+use components::biotracker::BioTracker;
 use libtracker::{message_bus, CommandLineArguments};
 use ui::BioTrackerUI;
 
@@ -23,8 +23,14 @@ fn main() {
         }
     }
 
-    let component_core = Core::new(&args).unwrap();
-    component_core.start().unwrap();
+    let args_copy = args.clone();
+    std::thread::Builder::new()
+        .name("BioTracker".to_string())
+        .spawn(move || {
+            let biotracker = BioTracker::new(&args_copy).unwrap();
+            biotracker.run();
+        })
+        .unwrap();
 
     let options = eframe::NativeOptions {
         drag_and_drop_support: true,

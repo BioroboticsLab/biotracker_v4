@@ -8,21 +8,23 @@ use std::sync::Arc;
 
 pub struct OffscreenRenderer {
     pub render_state: egui_wgpu::RenderState,
+    pub texture: Texture,
     context: egui::Context,
-    texture: Texture,
     copy_buffer: Option<wgpu::Buffer>,
     image_history: DoubleBuffer,
 }
 
-const WIDTH: u32 = 2048;
-const HEIGTH: u32 = 2048;
-
 impl OffscreenRenderer {
-    pub fn new(device: Arc<wgpu::Device>, queue: Arc<wgpu::Queue>) -> Self {
+    pub fn new(
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+        width: u32,
+        height: u32,
+    ) -> Self {
         let texture = Texture::new(
             &device,
-            WIDTH,
-            HEIGTH,
+            width,
+            height,
             wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -63,10 +65,9 @@ impl OffscreenRenderer {
         let render_state = &mut self.render_state;
 
         let screen_descriptor = egui_wgpu::renderer::ScreenDescriptor {
-            size_in_pixels: [WIDTH, HEIGTH],
+            size_in_pixels: [self.texture.size.width, self.texture.size.height],
             pixels_per_point: 1.0,
         };
-
         let user_cmd_bufs = {
             let mut renderer = render_state.renderer.write();
             for (id, image_delta) in &full_output.textures_delta.set {
@@ -98,7 +99,7 @@ impl OffscreenRenderer {
                         store: true,
                     },
                 })],
-                depth_stencil_attachment: None, // FIXME: could be necessary!
+                depth_stencil_attachment: None,
                 label: Some("egui_render"),
             });
 
@@ -114,7 +115,7 @@ impl OffscreenRenderer {
 
         let copy_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("egui_copy_buffer"),
-            size: (WIDTH * HEIGTH * 4) as u64,
+            size: (self.texture.size.width * self.texture.size.height * 4) as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -125,7 +126,7 @@ impl OffscreenRenderer {
                 buffer: &copy_buffer,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(NonZeroU32::new(WIDTH * 4).unwrap()),
+                    bytes_per_row: Some(NonZeroU32::new(self.texture.size.width * 4).unwrap()),
                     rows_per_image: None,
                 },
             },
@@ -142,7 +143,9 @@ impl OffscreenRenderer {
 
     pub fn post_rendering(&mut self, msg_bus: &Client, timestamp: u64) -> Result<()> {
         if let Some(copy_buffer) = self.copy_buffer.take() {
-            let mut shared_buffer = SharedBuffer::new((WIDTH * HEIGTH * 4) as usize)?;
+            let mut shared_buffer = SharedBuffer::new(
+                (self.texture.size.width * self.texture.size.height * 4) as usize,
+            )?;
             let buffer_slice = copy_buffer.slice(..);
             let (tx, rx) = std::sync::mpsc::channel();
             buffer_slice.map_async(wgpu::MapMode::Read, move |r| {
