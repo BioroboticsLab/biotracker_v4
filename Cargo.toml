@@ -30,6 +30,10 @@ clap = { version = "4.0", features = ["derive"] }
 pathfinding = "3.0"
 rand = "0.8"
 cv = { package= "opencv", version="0.75" }
+pylon-cxx = { version = "0.3.4", optional = true }
 
 [build-dependencies]
 prost-build = "0.11"
+
+[features]
+pylon = ["dep:pylon-cxx"]

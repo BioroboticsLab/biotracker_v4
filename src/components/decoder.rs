@@ -9,6 +9,15 @@ struct Playback {
     sampler: Box<dyn VideoSampler>,
 }
 
+#[cfg(feature = "pylon")]
+struct PylonCamera<'a> {
+    camera: pylon_cxx::InstantCamera<'a>,
+    grab_result: pylon_cxx::GrabResult,
+    // Safety: Camera holds an unchecked reference to _pylon_raii, keep this as the last element,
+    // so that it gets dropped last.
+    _pylon_raii: std::pin::Pin<Box<pylon_cxx::Pylon>>,
+}
+
 pub struct VideoDecoder {
     pub info: VideoInfo,
     buffer_manager: DoubleBuffer,
@@ -25,8 +34,16 @@ trait VideoSampler {
 }
 
 impl Playback {
-    fn open_path(path: String) -> Result<(Playback, VideoInfo)> {
-        let video_capture = VideoCapture::from_file(&path, 0)?;
+    fn open(uri: String) -> Result<(Playback, VideoInfo)> {
+        if uri == "pylon" {
+            Playback::open_basler(uri)
+        } else {
+            Playback::open_cv(uri)
+        }
+    }
+
+    fn open_cv(video_path: String) -> Result<(Playback, VideoInfo)> {
+        let video_capture = VideoCapture::from_file(&video_path, 0)?;
         let frame_number = video_capture.get(cv::videoio::CAP_PROP_POS_FRAMES)? as u32;
         let frame_count = video_capture.get(cv::videoio::CAP_PROP_FRAME_COUNT)? as u32;
         let width = video_capture.get(cv::videoio::CAP_PROP_FRAME_WIDTH)? as u32;
@@ -39,13 +56,89 @@ impl Playback {
                 sampler: Box::new(video_capture),
             },
             VideoInfo {
-                path,
+                path: video_path,
                 frame_count,
                 width,
                 height,
                 fps,
             },
         ))
+    }
+    #[cfg(not(feature = "pylon"))]
+    fn open_basler(_camera_id: String) -> Result<(Playback, VideoInfo)> {
+        panic!("Pylon feature disabled");
+    }
+
+    #[cfg(feature = "pylon")]
+    fn open_basler(camera_id: String) -> Result<(Playback, VideoInfo)> {
+        let pylon = Box::pin(pylon_cxx::Pylon::new());
+        // Safety:
+        // - pylon is pinned
+        // - pylon_camera.pylon is never modified
+        // - pylon_camera.pylon outlives pylon_camera.camera
+        let camera = unsafe {
+            let pylon_unchecked_ref = (&*pylon as *const pylon_cxx::Pylon).as_ref().unwrap();
+            pylon_cxx::TlFactory::instance(pylon_unchecked_ref).create_first_device()?
+        };
+        camera.open()?;
+        //camera.enum_node("PixelFormat")?.set_value("RGB8")?;
+        camera.start_grabbing(&pylon_cxx::GrabOptions::default())?;
+        let frame_number = 0;
+        let frame_count = 0;
+        // FIXME: get from node_map
+        let width = 2048;
+        let height = 2048;
+        let fps = 25.0;
+        let pylon_camera = Box::new(PylonCamera {
+            _pylon_raii: pylon,
+            camera,
+            grab_result: pylon_cxx::GrabResult::new()?,
+        });
+        Ok((
+            Playback {
+                frame_number,
+                sampler: pylon_camera,
+            },
+            VideoInfo {
+                path: camera_id,
+                frame_count,
+                width,
+                height,
+                fps,
+            },
+        ))
+    }
+}
+
+#[cfg(feature = "pylon")]
+impl VideoSampler for PylonCamera<'_> {
+    fn get_frame(&mut self, timestamp: u64) -> Result<(SharedBuffer, Image)> {
+        self.camera.retrieve_result(
+            2000,
+            &mut self.grab_result,
+            pylon_cxx::TimeoutHandling::ThrowException,
+        )?;
+
+        if self.grab_result.grab_succeeded()? {
+            let pylon_buffer = self.grab_result.buffer()?;
+            let width = self.grab_result.width()?;
+            let height = self.grab_result.height()?;
+            let mut shared_buffer = SharedBuffer::new(pylon_buffer.len())?;
+            unsafe {
+                shared_buffer.as_slice_mut().clone_from_slice(pylon_buffer);
+            }
+            let shm_id = shared_buffer.id().to_owned();
+            let image = Image {
+                stream_id: "Tracking".to_owned(),
+                timestamp,
+                shm_id,
+                width,
+                height,
+            };
+            Ok((shared_buffer, image))
+        } else {
+            Err(anyhow::anyhow!("PylonCamera: Failed to grab image"))
+        }
     }
 }
 
@@ -82,7 +175,7 @@ impl VideoSampler for VideoCapture {
 impl VideoDecoder {
     pub fn new(path: String) -> Result<Self> {
         let buffer_manager = DoubleBuffer::new();
-        let (playback, info) = Playback::open_path(path)?;
+        let (playback, info) = Playback::open(path)?;
         Ok(Self {
             buffer_manager,
             last_frame_msg_sent: Instant::now(),
