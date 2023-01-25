@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::components::biotracker::BioTrackerCommand;
 
 use super::annotated_video::AnnotatedVideo;
@@ -17,6 +19,9 @@ impl SidePanel {
         experiment: &mut ExperimentState,
         persistent_state: &mut PersistentState,
         video_view: &mut AnnotatedVideo,
+        image_streams: &HashSet<String>,
+        view_image: &mut String,
+        record_image: &mut String,
     ) -> Option<BioTrackerCommand> {
         let mut command = None;
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
@@ -27,6 +32,34 @@ impl SidePanel {
                     }
                     if ui.button("Remove Entity").clicked() {
                         command = Some(BioTrackerCommand::RemoveEntity);
+                    }
+                    match RecordingState::from_i32(experiment.recording_state).unwrap() {
+                        RecordingState::Initial | RecordingState::Finished => {
+                            egui::ComboBox::from_label("Select Recording Image")
+                                .selected_text(record_image.clone())
+                                .show_ui(ui, |ui| {
+                                    for image in image_streams {
+                                        if ui
+                                            .selectable_label(*image == *record_image, image)
+                                            .clicked()
+                                        {
+                                            *record_image = image.clone();
+                                        }
+                                    }
+                                });
+                            if ui.button("Start Recording").clicked() {
+                                command = Some(BioTrackerCommand::RecordingState(
+                                    RecordingState::Recording,
+                                ));
+                            }
+                        }
+                        RecordingState::Recording => {
+                            if ui.button("Stop Recording").clicked() {
+                                command = Some(BioTrackerCommand::RecordingState(
+                                    RecordingState::Finished,
+                                ));
+                            }
+                        }
                     }
                 });
             });
@@ -43,22 +76,18 @@ impl SidePanel {
             });
             ui.collapsing("Video", |ui| {
                 video_view.show_settings(ui);
-            });
-            ui.collapsing("Recording", |ui| {
-                match RecordingState::from_i32(experiment.recording_state).unwrap() {
-                    RecordingState::Initial | RecordingState::Finished => {
-                        if ui.button("Start Recording").clicked() {
-                            command =
-                                Some(BioTrackerCommand::RecordingState(RecordingState::Recording));
+                egui::ComboBox::from_label("Show Image")
+                    .selected_text(view_image.clone())
+                    .show_ui(ui, |ui| {
+                        for image in image_streams {
+                            if image == "Annotated" {
+                                continue;
+                            }
+                            if ui.selectable_label(*image == *view_image, image).clicked() {
+                                *view_image = image.clone();
+                            }
                         }
-                    }
-                    RecordingState::Recording => {
-                        if ui.button("Stop Recording").clicked() {
-                            command =
-                                Some(BioTrackerCommand::RecordingState(RecordingState::Finished));
-                        }
-                    }
-                }
+                    });
             });
         });
         command

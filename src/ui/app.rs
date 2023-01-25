@@ -4,6 +4,7 @@ use super::{
 use crate::components::biotracker::BioTrackerCommand;
 use anyhow::{anyhow, Result};
 use libtracker::{message_bus::Client, protocol::*, CommandLineArguments};
+use std::collections::HashSet;
 
 pub struct PersistentState {
     pub dark_mode: bool,
@@ -20,6 +21,9 @@ pub struct BioTrackerUI {
     render_offscreen: bool,
     offscreen_renderer: OffscreenRenderer,
     video_view: AnnotatedVideo,
+    image_streams: HashSet<String>,
+    view_image: String,
+    record_image: String,
 }
 
 impl BioTrackerUI {
@@ -34,9 +38,13 @@ impl BioTrackerUI {
 
         let msg_bus = Client::new().unwrap();
         msg_bus
-            .subscribe(&[Topic::Features, Topic::Entities, Topic::ExperimentState])
+            .subscribe(&[
+                Topic::Features,
+                Topic::Entities,
+                Topic::ExperimentState,
+                Topic::Image,
+            ])
             .unwrap();
-        msg_bus.subscribe_image("Tracking").unwrap();
 
         let render_state = cc
             .wgpu_render_state
@@ -59,6 +67,9 @@ impl BioTrackerUI {
             offscreen_renderer,
             render_offscreen: false,
             video_view: AnnotatedVideo::new(),
+            image_streams: HashSet::new(),
+            view_image: "Tracking".to_string(),
+            record_image: "Tracking".to_string(),
         })
     }
 
@@ -91,7 +102,10 @@ impl eframe::App for BioTrackerUI {
         while let Ok(Some(msg)) = self.msg_bus.poll(0) {
             match msg {
                 Message::Image(img) => {
-                    if img.stream_id == "Tracking" {
+                    if !self.image_streams.contains(&img.stream_id) {
+                        self.image_streams.insert(img.stream_id.clone());
+                    }
+                    if img.stream_id == self.view_image {
                         self.render_offscreen = true;
                         last_image = Some(img);
                     }
@@ -214,6 +228,9 @@ impl eframe::App for BioTrackerUI {
             &mut self.experiment,
             &mut self.persistent_state,
             &mut self.video_view,
+            &self.image_streams,
+            &mut self.view_image,
+            &mut self.record_image,
         ) {
             self.send_command(cmd);
         }

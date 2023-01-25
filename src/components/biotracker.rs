@@ -189,10 +189,9 @@ impl BioTracker {
             RecordingState::Recording => {
                 if let Some(_) = &self.state.video_info {
                     self.state.recording_state = RecordingState::Recording as i32;
-                    if let Some(video) = &self.args.video {
+                    if let Some(video) = &self.args.save_video {
                         self.start_video_encoder(video.to_owned())?;
                     }
-                    self.start_video_encoder("recording.mp4".to_owned())?;
                 }
                 Ok(())
             }

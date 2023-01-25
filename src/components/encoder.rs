@@ -40,10 +40,8 @@ impl Component for VideoEncoder {
                         }
                     }
                     Message::Image(image) => {
-                        eprintln!("Received image");
                         if self.recording_state == RecordingState::Recording {
                             if let Some(writer) = &mut self.video_writer {
-                                eprintln!("Recording image");
                                 VideoEncoder::record_frame(image, writer)?;
                             }
                         }

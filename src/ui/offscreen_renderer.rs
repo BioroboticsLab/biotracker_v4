@@ -11,6 +11,7 @@ pub struct OffscreenRenderer {
     pub texture: Texture,
     context: egui::Context,
     copy_buffer: Option<wgpu::Buffer>,
+    copy_buffer_row_padding: Option<u32>,
     image_history: DoubleBuffer,
 }
 
@@ -47,6 +48,7 @@ impl OffscreenRenderer {
             },
             texture,
             copy_buffer: None,
+            copy_buffer_row_padding: None,
             image_history: DoubleBuffer::new(),
         }
     }
@@ -113,9 +115,18 @@ impl OffscreenRenderer {
             }
         }
 
+        let rows = self.texture.size.height;
+        let mut bytes_per_row = self.texture.size.width * 4;
+        if bytes_per_row % 256 != 0 {
+            let row_padding = 256 - (bytes_per_row % 256);
+            self.copy_buffer_row_padding = Some(row_padding);
+            bytes_per_row += row_padding;
+        } else {
+            self.copy_buffer_row_padding = None;
+        }
         let copy_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("egui_copy_buffer"),
-            size: (self.texture.size.width * self.texture.size.height * 4) as u64,
+            size: (rows * bytes_per_row) as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -126,7 +137,7 @@ impl OffscreenRenderer {
                 buffer: &copy_buffer,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(NonZeroU32::new(self.texture.size.width * 4).unwrap()),
+                    bytes_per_row: Some(NonZeroU32::new(bytes_per_row).unwrap()),
                     rows_per_image: None,
                 },
             },
@@ -156,9 +167,23 @@ impl OffscreenRenderer {
 
             let buffer_view = buffer_slice.get_mapped_range();
             unsafe {
-                shared_buffer
-                    .as_slice_mut()
-                    .copy_from_slice(&(*buffer_view));
+                if let Some(row_padding) = self.copy_buffer_row_padding.take() {
+                    let dest = bytemuck::cast_slice_mut::<u8, u32>(shared_buffer.as_slice_mut());
+                    let src = bytemuck::cast_slice::<u8, u32>(&(*buffer_view));
+                    let (width, height) = (self.texture.size.width, self.texture.size.height);
+                    let channels = std::mem::size_of::<u32>() as u32;
+                    for row in 0..height {
+                        for col in 0..width {
+                            let src_idx = row * (width + row_padding / channels) + col;
+                            let dest_idx = row * width + col;
+                            dest[dest_idx as usize] = src[src_idx as usize];
+                        }
+                    }
+                } else {
+                    shared_buffer
+                        .as_slice_mut()
+                        .copy_from_slice(&(*buffer_view));
+                }
             }
             let image = Image {
                 stream_id: "Annotated".to_string(),

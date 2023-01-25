@@ -32,16 +32,19 @@ class SLEAPTracker():
                     # skip to next image
                     continue
                 buf = shared_img.as_numpy()
-                grayscale = cv2.cvtColor(buf, cv2.COLOR_RGBA2GRAY)
-                grayscale = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
-                prediction = self.predictor.inference_model.predict(grayscale)
+                resized = cv2.resize(buf, (self.target_width, self.target_height))
+                grayscale = cv2.cvtColor(resized, cv2.COLOR_RGBA2GRAY)
+                np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
+                prediction = self.predictor.inference_model.predict(np_array)
                 features = Features(timestamp=img.timestamp, skeleton=self.skeleton)
                 for peaks, vals, instance_score in zip(prediction['instance_peaks'][0],
                                                         prediction['instance_peak_vals'][0],
                                                         prediction['centroid_vals'][0]):
                     feature = Feature(score=instance_score)
                     for peak, val in zip(peaks, vals):
-                        node = SkeletonNode(x=peak[0], y=peak[1], score=val)
+                        scale_x = self.target_width / img.width
+                        scale_y = self.target_width / img.width
+                        node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
                         feature.nodes.append(node)
                     features.features.append(feature)
                 self.message_bus.send(BioTrackerMessage(topic=Topic.FEATURES, features=features))
