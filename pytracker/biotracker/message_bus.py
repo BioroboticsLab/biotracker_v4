@@ -1,5 +1,4 @@
 from .biotracker.biotracker import Component, BioTrackerMessage, Topic, ComponentMessage
-from multiprocessing.shared_memory import SharedMemory, resource_tracker
 import numpy as np
 import zmq
 from enum import Enum

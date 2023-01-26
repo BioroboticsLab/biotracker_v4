@@ -140,7 +140,7 @@ impl AnnotatedVideo {
                 }
                 painter.line_segment(
                     [from, to],
-                    egui::Stroke::new(2.0 * scale, egui::Color32::BLACK),
+                    egui::Stroke::new(2.0 * scale, egui::Color32::WHITE),
                 );
             }
         }

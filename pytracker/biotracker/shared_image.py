@@ -1,4 +1,5 @@
-from multiprocessing.shared_memory import SharedMemory, resource_tracker
+from multiprocessing.shared_memory import SharedMemory
+from multiprocessing import resource_tracker
 import numpy as np
 
 class BufferManager:

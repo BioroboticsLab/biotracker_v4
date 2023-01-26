@@ -8,7 +8,7 @@ pub struct PythonRunner {
 
 impl Component for PythonRunner {
     fn run(&mut self) -> Result<()> {
-        let shell_cmd = format!("source {}/bin/activate && python3 {}", self.venv, self.cmd);
+        let shell_cmd = format!(". {}/bin/activate && python3 {}", self.venv, self.cmd);
         let output = std::process::Command::new("/bin/sh")
             .arg("-c")
             .arg(shell_cmd.clone())
