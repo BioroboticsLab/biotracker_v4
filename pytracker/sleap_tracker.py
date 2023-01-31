@@ -5,74 +5,78 @@ import numpy as np
 import sleap
 import json
 
-component_descriptor = Component(id="SLEAPTracker", typ=ComponentType.FEATURE_DETECTOR)
+import asyncio
+from grpclib.client import Channel
+from grpclib.server import Server
 
-class SLEAPTracker():
-    def __init__(self):
-        self.message_bus = MessageBus()
+class SLEAPTracker(FeatureDetectorBase):
+    async def detect_features(self, image: "Image") -> "Features":
+        try:
+            shared_img = SharedImage(image)
+        except FileNotFoundError as e:
+            raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, repr(e))
+        buf = shared_img.as_numpy()
+        resized = cv2.resize(buf, (self.target_width, self.target_height))
+        grayscale = cv2.cvtColor(resized, cv2.COLOR_RGBA2GRAY)
+        np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
+        prediction = self.predictor.inference_model.predict(np_array)
+        features = Features(skeleton=self.skeleton)
+        for peaks, vals, instance_score in zip(prediction['instance_peaks'][0],
+                                               prediction['instance_peak_vals'][0],
+                                               prediction['centroid_vals'][0]):
+            feature = Feature(score=instance_score)
+            for peak, val in zip(peaks, vals):
+                scale_x = self.target_width / image.width
+                scale_y = self.target_width / image.width
+                node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
+                feature.nodes.append(node)
+            features.features.append(feature)
+        return features
 
-    def run(self):
-        component_config = self.message_bus.register(component_descriptor)
-        self.load_config(component_config)
-        self.message_bus.subscribe_images("Tracking")
-        self.message_bus.subscribe(Topic.SHUTDOWN)
-        while True:
-            msg = self.message_bus.poll(-1)
-            if msg.topic == Topic.SHUTDOWN:
-                break
-            if msg.topic == Topic.COMPONENT_MESSAGE:
-                self.load_config(msg.component_message.config_json)
-            elif msg.topic == Topic.IMAGE:
-                img = msg.image
-                assert(img.stream_id == "Tracking")
-                try:
-                    shared_img = SharedImage(img)
-                except FileNotFoundError:
-                    print(f"Warning: Image '{img.timestamp}' expired (tracking too slow)")
-                    # skip to next image
-                    continue
-                buf = shared_img.as_numpy()
-                resized = cv2.resize(buf, (self.target_width, self.target_height))
-                grayscale = cv2.cvtColor(resized, cv2.COLOR_RGBA2GRAY)
-                np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
-                prediction = self.predictor.inference_model.predict(np_array)
-                features = Features(timestamp=img.timestamp, skeleton=self.skeleton)
-                for peaks, vals, instance_score in zip(prediction['instance_peaks'][0],
-                                                        prediction['instance_peak_vals'][0],
-                                                        prediction['centroid_vals'][0]):
-                    feature = Feature(score=instance_score)
-                    for peak, val in zip(peaks, vals):
-                        scale_x = self.target_width / img.width
-                        scale_y = self.target_width / img.width
-                        node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
-                        feature.nodes.append(node)
-                    features.features.append(feature)
-                self.message_bus.send(BioTrackerMessage(topic=Topic.FEATURES, features=features))
-            else:
-                print("Unknown message type: " + ty.decode())
-                break
+    async def set_config(
+        self, component_configuration: "ComponentConfiguration"
+    ) -> "Empty":
+        await self.load_config(component_configuration.config_json)
+        return Empty()
 
-    def load_config(self, config_json):
+    async def load_config(self, config_json):
         config = json.loads(config_json)
         model_paths = config['model_paths']
         self.predictor = sleap.load_model(model_paths, batch_size=1)
-        self.initialize_skeleton()
         self.target_width = self.predictor.centroid_config.data.preprocessing.target_width
         self.target_height = self.predictor.centroid_config.data.preprocessing.target_height
+        await self.initialize_skeleton(config['model_config']['front_node'],
+                                       config['model_config']['center_node'])
         # warmup inference
         self.predictor.inference_model.predict(np.zeros((1, self.target_width, self.target_height, 1), dtype = "uint8"))
 
-    def initialize_skeleton(self):
+    async def initialize_skeleton(self, center_node, front_node):
         sleap_skeleton = self.predictor.centroid_config.data.labels.skeletons[0]
         anchor_part = self.predictor.centroid_config.model.heads.centroid.anchor_part
         edges = []
+        center_node_index = -1
+        front_node_index = -1
         for from_idx, to_idx in sleap_skeleton.edge_inds:
             edges.append(SkeletonEdge(source=from_idx, target=to_idx))
+        for i,name in enumerate(sleap_skeleton.node_names):
+            if name == front_node:
+                front_node_index = i
+            if name == center_node:
+                center_node_index = i
+        assert(front_node_index != -1 and center_node_index != -1)
         skeleton_descriptor = SkeletonDescriptor(edges=edges,
                                                  node_names=sleap_skeleton.node_names,
-                                                 center_node=anchor_part)
+                                                 center_node_index=center_node_index,
+                                                 front_node_index=front_node_index)
         self.skeleton = skeleton_descriptor
 
+async def main():
+    addr, port = get_address_and_port()
+    server = Server([SLEAPTracker()])
+    await server.start(addr, port)
+    await server.wait_closed()
+
 if __name__ == "__main__":
-    tracker = SLEAPTracker()
-    tracker.run()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main())

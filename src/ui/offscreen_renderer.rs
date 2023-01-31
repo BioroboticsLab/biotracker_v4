@@ -1,9 +1,9 @@
 use super::texture::Texture;
+use crate::biotracker::{protocol::*, DoubleBuffer, SharedBuffer};
 use anyhow::Result;
 use core::num::NonZeroU32;
 use egui::mutex::RwLock;
 use egui_wgpu::wgpu;
-use libtracker::{message_bus::Client, protocol::*, DoubleBuffer, SharedBuffer};
 use std::sync::Arc;
 
 pub struct OffscreenRenderer {
@@ -152,7 +152,7 @@ impl OffscreenRenderer {
             .submit(user_cmd_bufs.into_iter().chain(std::iter::once(encoded)));
     }
 
-    pub fn post_rendering(&mut self, msg_bus: &Client, timestamp: u64) -> Result<()> {
+    pub fn texture_to_image(&mut self, frame_number: u32) -> Result<Image> {
         if let Some(copy_buffer) = self.copy_buffer.take() {
             let mut shared_buffer = SharedBuffer::new(
                 (self.texture.size.width * self.texture.size.height * 4) as usize,
@@ -190,11 +190,12 @@ impl OffscreenRenderer {
                 shm_id: shared_buffer.id().to_owned(),
                 width: self.texture.size.width,
                 height: self.texture.size.height,
-                timestamp,
+                frame_number,
             };
             self.image_history.push(shared_buffer);
-            msg_bus.send(Message::Image(image)).unwrap();
+            self.copy_buffer = None;
+            return Ok(image);
         }
-        Ok(())
+        Err(anyhow::anyhow!("No copy buffer"))
     }
 }

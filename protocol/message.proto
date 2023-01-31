@@ -3,26 +3,89 @@ syntax = "proto3";
 package biotracker;
 
 import "tracking.proto";
-import "experiment.proto";
 import "video.proto";
 
-enum Topic {
-    IMAGE = 0;
-    FEATURES = 1;
-    ENTITIES = 2;
-    EXPERIMENT_STATE = 3;
-    COMPONENT_MESSAGE = 4;
-    SHUTDOWN = 5;
+message Empty {}
+
+message Arena {
+  uint32 width_cm = 3;
+  uint32 height_cm = 4;
 }
 
-message BioTrackerMessage {
-    Topic topic = 7;
-    oneof content {
-        Image image = 1;
-        Features features = 2;
-        Entities entities = 3;
-        ExperimentState experiment_state = 4;
-        ComponentMessage component_message = 5;
-        Shutdown shutdown = 6;
+message BioTrackerCommand {
+    oneof command {
+        PlaybackState playback_state = 1;
+        RecordingState recording_state = 2;
+        uint32 seek = 3;
+        string open_video = 4;
+        string add_entity = 5;
+        string remove_entity = 6;
+        VideoEncoderConfig video_encoder_config = 7;
+        Empty shutdown = 8;
     }
+}
+
+message ExperimentState {
+    string base_directory = 1;
+    uint32 entity_count = 2;
+    double target_fps = 3;
+    VideoInfo video_info = 4;
+    VideoEncoderConfig video_encoder_config = 5;
+    Arena arena = 6;
+    PlaybackState playback_state = 7;
+    RecordingState recording_state = 8;
+    optional Image last_image = 9;
+    optional Entities last_entities = 10;
+    optional Features last_features = 11;
+}
+
+message EntitiesRequest {
+    uint32 entity_count = 1;
+}
+
+message MatcherRequest {
+    Features features = 1;
+    uint32 expected_count = 3;
+    uint32 frame_number = 4;
+    optional Entities last_entities = 2;
+}
+
+service BioTracker {
+    rpc get_state(Empty) returns (ExperimentState) {}
+    rpc command(BioTrackerCommand) returns (Empty) {}
+    rpc add_image(Image) returns (Empty) {}
+    // rpc log(LogRequest) returns (Empty); // TODO
+}
+
+service FeatureDetector {
+    rpc set_config(ComponentConfiguration) returns (Empty) {}
+    rpc detect_features(Image) returns (Features);
+}
+
+service Matcher {
+    rpc set_config(ComponentConfiguration) returns (Empty) {}
+    rpc match_features(MatcherRequest) returns (Entities);
+}
+
+message TrackSaveRequest {
+    ExperimentState experiment_state = 1;
+    map<string, Track> tracks = 12;
+    string save_path = 3;
+}
+
+service TrackRecorder {
+    rpc set_config(ComponentConfiguration) returns (Empty) {}
+    rpc load(Empty) returns (Track);
+    rpc save(TrackSaveRequest) returns (Empty);
+}
+
+message ComponentConfiguration {
+    string config_json = 1;
+}
+
+enum ServiceType {
+    BIOTRACKER_CORE = 0;
+    FEATURE_DETECTOR = 1;
+    MATCHER = 2;
+    TRACK_RECORDER = 3;
 }

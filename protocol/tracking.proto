@@ -8,15 +8,24 @@ message Feature {
 }
 
 message Features {
-  uint64 timestamp = 1;
   repeated Feature features = 2;
   SkeletonDescriptor skeleton = 3;
 }
 
+message Entity {
+  string id = 1;
+  uint32 frame_number = 2;
+  Feature feature = 3;
+}
+
 message Entities {
-  uint64 timestamp = 1;
-  map<string, Feature> entities = 2;
+  repeated Entity entities = 2;
   SkeletonDescriptor skeleton = 3;
+}
+
+message Track {
+  SkeletonDescriptor skeleton = 3;
+  repeated Entity observations = 1;
 }
 
 message SkeletonNode {
@@ -33,5 +42,6 @@ message SkeletonEdge {
 message SkeletonDescriptor {
   repeated SkeletonEdge edges = 1;
   repeated string node_names = 2;
-  optional string center_node = 3;
+  uint32 center_node_index = 3;
+  uint32 front_node_index = 4;
 }

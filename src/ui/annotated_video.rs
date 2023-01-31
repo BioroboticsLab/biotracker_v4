@@ -1,13 +1,15 @@
 use super::{
+    app::BioTrackerUIContext,
     color::{Palette, ALPHABET},
     texture::Texture,
 };
+use crate::biotracker::{
+    protocol::{Feature, Image, SkeletonDescriptor},
+    SharedBuffer,
+};
 use egui_wgpu::wgpu;
-use libtracker::{protocol::Image, Entities, Feature, Features, SharedBuffer, SkeletonDescriptor};
 
 pub struct AnnotatedVideo {
-    last_features: Option<Features>,
-    last_entities: Option<Entities>,
     color_palette: Palette,
     draw_features: bool,
     draw_entities: bool,
@@ -21,8 +23,6 @@ pub struct AnnotatedVideo {
 impl AnnotatedVideo {
     pub fn new() -> Self {
         Self {
-            last_features: None,
-            last_entities: None,
             color_palette: Palette { colors: &ALPHABET },
             draw_features: false,
             draw_entities: true,
@@ -34,14 +34,6 @@ impl AnnotatedVideo {
         }
     }
 
-    pub fn update_features(&mut self, features: Features) {
-        self.last_features = Some(features);
-    }
-
-    pub fn update_entities(&mut self, entities: Entities) {
-        self.last_entities = Some(entities);
-    }
-
     pub fn update_scale(&mut self, zoom_delta: f32) {
         if zoom_delta != 1.0 {
             self.scale = 0.1f32.max(self.scale * zoom_delta);
@@ -50,7 +42,7 @@ impl AnnotatedVideo {
 
     pub fn update_image(
         &mut self,
-        image: Image,
+        image: &Image,
         onscreen_render_state: &egui_wgpu::RenderState,
         offscreen_render_state: &egui_wgpu::RenderState,
     ) {
@@ -107,12 +99,12 @@ impl AnnotatedVideo {
         ui.checkbox(&mut self.draw_node_labels, "Draw node labels");
     }
 
-    pub fn show_onscreen(&self, ui: &mut egui::Ui) {
-        self.show(ui, self.onscreen_id, Some(self.scale));
+    pub fn show_onscreen(&self, ui: &mut egui::Ui, ctx: &BioTrackerUIContext) {
+        self.show(ui, self.onscreen_id, Some(self.scale), ctx);
     }
 
-    pub fn show_offscreen(&self, ui: &mut egui::Ui) {
-        self.show(ui, self.offscreen_id, None);
+    pub fn show_offscreen(&self, ui: &mut egui::Ui, ctx: &BioTrackerUIContext) {
+        self.show(ui, self.offscreen_id, None, ctx);
     }
 
     fn paint_feature(
@@ -176,7 +168,13 @@ impl AnnotatedVideo {
         }
     }
 
-    fn show(&self, ui: &mut egui::Ui, texture_id: egui::epaint::TextureId, scale: Option<f32>) {
+    fn show(
+        &self,
+        ui: &mut egui::Ui,
+        texture_id: egui::epaint::TextureId,
+        scale: Option<f32>,
+        ctx: &BioTrackerUIContext,
+    ) {
         let texture = match &self.texture {
             Some(texture) => texture,
             None => return,
@@ -204,7 +202,7 @@ impl AnnotatedVideo {
             ),
             response.rect,
         );
-        if let Some(features) = &self.last_features {
+        if let Some(features) = &ctx.current_features {
             if self.draw_features {
                 for feature in &features.features {
                     self.paint_feature(
@@ -218,14 +216,14 @@ impl AnnotatedVideo {
                 }
             }
         }
-        if let Some(entities) = &self.last_entities {
+        if let Some(entities) = &ctx.current_entities {
             if self.draw_entities {
-                for (uuid, feature) in &entities.entities {
-                    let color = self.color_palette.pick(&uuid);
+                for entity in &entities.entities {
+                    let color = self.color_palette.pick(&entity.id);
                     self.paint_feature(
                         &painter,
                         &to_screen,
-                        feature,
+                        entity.feature.as_ref().expect("Entity without feature"),
                         &entities.skeleton,
                         color,
                         scale,

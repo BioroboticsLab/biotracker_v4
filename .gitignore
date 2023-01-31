@@ -7,5 +7,6 @@ TODO
 pytracker/biotracker/biotracker/**
 **.mp4
 **.hdf5
+**.png
 AppDir/
 *.AppImage

@@ -17,8 +17,24 @@ enum RecordingState {
 
 message Image {
   string stream_id = 1;
-  uint64 timestamp = 2;
+  uint32 frame_number = 2;
   string shm_id = 3;
   uint32 width = 4;
   uint32 height = 5;
+}
+
+message VideoInfo {
+  string path = 1;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 frame_count = 2;
+  double fps = 5;
+}
+
+message VideoEncoderConfig {
+    string video_path = 1;
+    double fps = 2;
+    uint32 width = 3;
+    uint32 height = 4;
+    string image_stream_id = 5;
 }

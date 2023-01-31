@@ -1,3 +1,4 @@
+import sys
 from biotracker import *
 
 import robofish.io
@@ -5,86 +6,66 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import json
+import os
 
-component_descriptor = Component(id="RobofishIO", typ=ComponentType.RECORDER)
+import asyncio
+from grpclib.client import Channel
+from grpclib.server import Server
 
-class Recorder():
-    def __init__(self):
-        self.message_bus = MessageBus()
+class TrackRecorder(TrackRecorderBase):
+    async def set_config(
+        self, component_configuration: "ComponentConfiguration"
+    ) -> "Empty":
+        return Empty()
 
-    def load_config(self, config_json):
-        config = json.loads(config_json)
-        self.front_node_name = config['front_node']
-        self.center_node_name = config['center_node']
+    async def load(self, empty: "Empty") -> "Track":
+        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
 
-    def run(self):
-        config = self.message_bus.register(component_descriptor)
-        self.load_config(config)
-        self.message_bus.subscribe(Topic.EXPERIMENT_STATE)
-        self.message_bus.subscribe(Topic.ENTITIES)
-        self.message_bus.subscribe(Topic.SHUTDOWN)
-        while True:
-            msg = self.message_bus.poll(-1)
-            if msg.topic == Topic.SHUTDOWN:
-                sys.exit(0)
-            if msg.topic == Topic.COMPONENT_MESSAGE:
-                self.load_config(msg.component_message.config_json)
-            elif msg.topic == Topic.EXPERIMENT_STATE:
-                self.world_size_cm = (msg.experiment_state.arena.width_cm,
-                                      msg.experiment_state.arena.height_cm)
-                if msg.experiment_state.video_info is not None:
-                    self.resolution = (msg.experiment_state.video_info.width,
-                                       msg.experiment_state.video_info.height)
-                    self.hz = msg.experiment_state.video_info.fps
-                if msg.experiment_state.recording_state == RecordingState.RECORDING:
-                    assert(self.resolution is not None)
-                    assert(self.world_size_cm is not None)
-                    self.record()
+    async def save(self, track_save_request: "TrackSaveRequest") -> "Empty":
+        tracks = track_save_request.tracks
+        filename = track_save_request.save_path
+        experiment = track_save_request.experiment_state
 
-    def record(self):
-        sample_count = 0
+        self.world_size_cm = (experiment.arena.width_cm,
+                              experiment.arena.height_cm)
+        self.resolution = (experiment.video_info.width,
+                           experiment.video_info.height)
+        self.hz = experiment.target_fps
         recorded_entities = {}
 
-        with robofish.io.File('test.hdf5', mode='w', world_size_cm=self.world_size_cm, frequency_hz=self.hz) as f:
-            while True:
-                msg = self.message_bus.poll(-1)
-                if msg.topic == Topic.SHUTDOWN:
-                    sys.exit(0)
-                elif msg.topic == Topic.ENTITIES:
-                    self.add_observations(msg.entities, recorded_entities, sample_count)
-                    sample_count += 1
-                elif msg.topic == Topic.EXPERIMENT_STATE:
-                    if msg.experiment_state.recording_state != RecordingState.RECORDING:
-                        break
-            for (id, poses) in recorded_entities.items():
-                np_poses = np.array(poses)
-                f.create_entity(category='organism', name=id, poses=np_poses)
-            if len(recorded_entities.items()) > 0:
-                self.plot(f)
+        start_frame_number = 2**32
+        for track in tracks.values():
+            start_frame_number = min(start_frame_number, track.observations[0].frame_number)
+        loop.run_in_executor(None, lambda: self.save_tracks(
+            filename, start_frame_number, tracks))
+        return Empty()
 
-    def add_observations(self, entities, recorded_entities, sample_count):
-        skeleton = entities.skeleton
-        observed_entities = entities.entities
-        front_idx, center_idx = (None, None)
-        for i, node_name in enumerate(skeleton.node_names):
-            if node_name == self.front_node_name:
-                front_idx = i
-            elif node_name == self.center_node_name:
-                center_idx = i
+    def save_tracks(self, filename, start_frame_number, tracks):
+        path = filename + '.hdf5'
+        with robofish.io.File(path, mode='w', world_size_cm=self.world_size_cm, frequency_hz=self.hz) as f:
+            for id, track in tracks.items():
+                poses = self.track_to_poses(track, start_frame_number)
+                f.create_entity(category='organism', name=id, poses=poses)
+
+        if len(tracks) > 0:
+            self.plot(f, path)
+
+    def track_to_poses(self, track, min_frame_number):
+        poses = []
+        center_idx, front_idx = (track.skeleton.center_node_index, track.skeleton.front_node_index)
         assert(front_idx is not None and center_idx is not None)
 
+        last_frame_number = min_frame_number - 1
         nan_pose = [np.nan] * 4
-        for (id, feature) in observed_entities.items():
-            pose = self.feature_to_pose(feature, front_idx, center_idx)
-            if id not in recorded_entities:
-                if sample_count > 0:
-                    recorded_entities[id] = [nan_pose] * sample_count
-                else:
-                    recorded_entities[id] = []
-            recorded_entities[id].append(pose)
-        for (id, feature) in recorded_entities.items():
-            if id not in observed_entities:
-                recorded_entities[id].append(nan_pose)
+        for entity in track.observations:
+            pose = self.feature_to_pose(entity.feature, front_idx, center_idx)
+            if entity.frame_number > last_frame_number + 1:
+                fill_nan_start = last_frame_number + 1
+                fill_nan_end = entity.frame_number
+                poses.extend([nan_pose] * (fill_nan_end - fill_nan_start))
+            poses.append(pose)
+            last_frame_number = entity.frame_number
+        return np.array(poses)
 
     def feature_to_pose(self, feature, front_idx, center_idx):
         assert(len(feature.nodes) >= 2)
@@ -94,15 +75,19 @@ class Recorder():
     def pixel_to_world(self, x, y):
         cm, px = self.world_size_cm, self.resolution
         return [x * cm[0] / px[0] - cm[0] / 2,
-                y * cm[1] / px[1] - cm[1] / 2]
+                -(y * cm[1] / px[1] - cm[1] / 2)]
 
-    def plot(self, f):
-        fig, ax = plt.subplots(1,2, figsize=(10,5))
-        f.plot(ax=ax[0])
-        f.plot(ax=ax[1], lw_distances=True)
-        plt.show()
+    def plot(self, f, filename):
+        os.system('robofish-io-evaluate tracks ' + filename)
 
+
+async def main():
+    addr, port = get_address_and_port()
+    server = Server([TrackRecorder()])
+    await server.start(addr, port)
+    await server.wait_closed()
 
 if __name__ == "__main__":
-    recorder = Recorder()
-    recorder.run()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(main())

@@ -2,6 +2,8 @@ use anyhow::Result;
 use shared_memory::*;
 use std::collections::VecDeque;
 
+unsafe impl Send for SharedBuffer {}
+unsafe impl Sync for SharedBuffer {}
 pub struct SharedBuffer {
     shmem: Shmem,
 }

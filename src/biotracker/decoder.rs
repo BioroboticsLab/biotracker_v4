@@ -1,12 +1,22 @@
+use super::{
+    protocol::{Image, VideoInfo},
+    DoubleBuffer, SharedBuffer,
+};
 use anyhow::Result;
 use cv::prelude::*;
 use cv::videoio::VideoCapture;
-use libtracker::{protocol::*, DoubleBuffer, SharedBuffer};
-use std::time::{Duration, Instant};
 
 struct Playback {
     frame_number: u32,
     sampler: Box<dyn VideoSampler>,
+}
+
+unsafe impl Send for VideoDecoder {}
+unsafe impl Sync for VideoDecoder {}
+pub struct VideoDecoder {
+    pub info: VideoInfo,
+    playback: Playback,
+    buffer_manager: DoubleBuffer,
 }
 
 #[cfg(feature = "pylon")]
@@ -18,16 +28,8 @@ struct PylonCamera<'a> {
     _pylon_raii: std::pin::Pin<Box<pylon_cxx::Pylon>>,
 }
 
-pub struct VideoDecoder {
-    pub info: VideoInfo,
-    buffer_manager: DoubleBuffer,
-    last_frame_msg_sent: Instant,
-    last_timestamp: u64,
-    playback: Playback,
-}
-
 trait VideoSampler {
-    fn get_frame(&mut self, timestamp: u64) -> Result<(SharedBuffer, Image)>;
+    fn get_image(&mut self, frame_number: u32) -> Result<(SharedBuffer, Image)>;
     fn seek(&mut self, _target_framenumber: u32) -> Result<()> {
         Err(anyhow::anyhow!("Seek not supported"))
     }
@@ -112,7 +114,7 @@ impl Playback {
 
 #[cfg(feature = "pylon")]
 impl VideoSampler for PylonCamera<'_> {
-    fn get_frame(&mut self, timestamp: u64) -> Result<(SharedBuffer, Image)> {
+    fn get_image(&mut self, frame_number: u32) -> Result<(SharedBuffer, Image)> {
         self.camera.retrieve_result(
             2000,
             &mut self.grab_result,
@@ -130,7 +132,7 @@ impl VideoSampler for PylonCamera<'_> {
             let shm_id = shared_buffer.id().to_owned();
             let image = Image {
                 stream_id: "Tracking".to_owned(),
-                timestamp,
+                frame_number,
                 shm_id,
                 width,
                 height,
@@ -143,7 +145,7 @@ impl VideoSampler for PylonCamera<'_> {
 }
 
 impl VideoSampler for VideoCapture {
-    fn get_frame(&mut self, timestamp: u64) -> Result<(SharedBuffer, Image)> {
+    fn get_image(&mut self, frame_number: u32) -> Result<(SharedBuffer, Image)> {
         let mut img = Mat::default();
         self.read(&mut img)?;
         let mut img_rgba = Mat::default();
@@ -158,7 +160,7 @@ impl VideoSampler for VideoCapture {
         let shm_id = image_buffer.id().to_owned();
         let image = Image {
             stream_id: "Tracking".to_owned(),
-            timestamp,
+            frame_number,
             shm_id,
             width,
             height,
@@ -174,31 +176,20 @@ impl VideoSampler for VideoCapture {
 
 impl VideoDecoder {
     pub fn new(path: String) -> Result<Self> {
-        let buffer_manager = DoubleBuffer::new();
         let (playback, info) = Playback::open(path)?;
         Ok(Self {
-            buffer_manager,
-            last_frame_msg_sent: Instant::now(),
-            last_timestamp: 0,
-            playback,
             info,
+            playback,
+            buffer_manager: DoubleBuffer::new(),
         })
     }
 
-    pub fn next_frame(&mut self, target_fps: f64) -> Result<Option<Image>> {
-        let next_msg_deadline =
-            self.last_frame_msg_sent + Duration::from_secs_f64(1.0 / target_fps);
-        self.last_frame_msg_sent = next_msg_deadline;
-        let now = Instant::now();
-        if now < next_msg_deadline {
-            std::thread::sleep(next_msg_deadline - now);
-        }
-        let timestamp = ((self.playback.frame_number as f64 / target_fps) * 1e9) as u64;
-        let (image_buffer, image) = self.playback.sampler.get_frame(timestamp)?;
+    pub fn get_image(&mut self) -> Result<Image> {
+        let frame_number = self.playback.frame_number;
+        let (image_buffer, image) = self.playback.sampler.get_image(frame_number)?;
         self.buffer_manager.push(image_buffer);
-        self.last_timestamp = image.timestamp;
         self.playback.frame_number += 1;
-        return Ok(Some(image));
+        Ok(image)
     }
 
     pub fn seek(&mut self, target_framenumber: u32) -> Result<()> {
