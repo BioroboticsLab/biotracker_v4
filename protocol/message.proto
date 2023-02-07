@@ -5,6 +5,14 @@ package biotracker;
 import "tracking.proto";
 import "video.proto";
 
+
+enum ServiceType {
+    BIOTRACKER_CORE = 0;
+    FEATURE_DETECTOR = 1;
+    MATCHER = 2;
+    TRACK_RECORDER = 3;
+}
+
 message Empty {}
 
 message Arena {
@@ -39,17 +47,6 @@ message ExperimentState {
     optional Features last_features = 11;
 }
 
-message EntitiesRequest {
-    uint32 entity_count = 1;
-}
-
-message MatcherRequest {
-    Features features = 1;
-    uint32 expected_count = 3;
-    uint32 frame_number = 4;
-    optional Entities last_entities = 2;
-}
-
 service BioTracker {
     rpc get_state(Empty) returns (ExperimentState) {}
     rpc command(BioTrackerCommand) returns (Empty) {}
@@ -57,9 +54,21 @@ service BioTracker {
     // rpc log(LogRequest) returns (Empty); // TODO
 }
 
+message DetectorRequest {
+    Image image = 1;
+    Arena arena = 2;
+}
+
 service FeatureDetector {
     rpc set_config(ComponentConfiguration) returns (Empty) {}
-    rpc detect_features(Image) returns (Features);
+    rpc detect_features(DetectorRequest) returns (Features);
+}
+
+message MatcherRequest {
+    Features features = 1;
+    uint32 expected_count = 3;
+    uint32 frame_number = 4;
+    optional Entities last_entities = 2;
 }
 
 service Matcher {
@@ -81,11 +90,4 @@ service TrackRecorder {
 
 message ComponentConfiguration {
     string config_json = 1;
-}
-
-enum ServiceType {
-    BIOTRACKER_CORE = 0;
-    FEATURE_DETECTOR = 1;
-    MATCHER = 2;
-    TRACK_RECORDER = 3;
 }

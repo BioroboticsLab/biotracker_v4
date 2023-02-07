@@ -2,8 +2,15 @@ syntax = "proto3";
 
 package biotracker;
 
+message Pose {
+  float x_cm = 1;
+  float y_cm = 2;
+  float orientation_rad = 3;
+}
+
 message Feature {
-  repeated SkeletonNode nodes = 2;
+  repeated SkeletonNode nodes = 1;
+  Pose pose = 2;
   float score = 3;
 }
 
@@ -42,6 +49,4 @@ message SkeletonEdge {
 message SkeletonDescriptor {
   repeated SkeletonEdge edges = 1;
   repeated string node_names = 2;
-  uint32 center_node_index = 3;
-  uint32 front_node_index = 4;
 }

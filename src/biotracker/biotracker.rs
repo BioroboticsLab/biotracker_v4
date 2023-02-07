@@ -1,6 +1,6 @@
 use super::{
     protocol::*, ChannelRequest, CommandLineArguments, ComponentConfig, MatcherService,
-    PythonProcess, Service, State,
+    PythonProcess, RobofishCommander, Service, State,
 };
 use anyhow::Result;
 use bio_tracker_server::BioTrackerServer;
@@ -19,6 +19,7 @@ pub struct Core {
     python_processes: Vec<PythonProcess>,
     state: State,
     state_rx: Receiver<ChannelRequest<(), ExperimentState>>,
+    robofish_commander_bridge: RobofishCommander,
 }
 
 enum GrpcClient {
@@ -59,7 +60,7 @@ impl Core {
             state_tx,
             image_tx,
         });
-        let biotracker_address = "[::1]:50051".parse().unwrap();
+        let biotracker_address = "[::1]:33072".parse().unwrap();
         tokio::spawn(async move {
             Server::builder()
                 .add_service(biotracker_server)
@@ -75,6 +76,7 @@ impl Core {
             python_processes: vec![],
             state,
             state_rx,
+            robofish_commander_bridge: RobofishCommander::new().await?,
         })
     }
 
@@ -83,7 +85,6 @@ impl Core {
         for component in &components {
             self.start_component(component.clone()).await.unwrap();
         }
-
         for component in &components {
             for client in self.connect_component(&component).await? {
                 match client {
@@ -163,20 +164,17 @@ impl Core {
         let (decoder_tx, mut decoder_rx) = channel(16);
         let (tracking_tx, mut tracking_rx) = channel(16);
 
-        loop {
+        while !shutdown {
             let image_timer = fps_interval.tick();
 
             tokio::select! {
                 Some(command) = self.command_rx.recv() => {
-                    let result = self.state.handle_command(command.request, &mut shutdown);
+                    let result = self.handle_command(command.request, &mut shutdown).await;
                     if shutdown {
-                        let result =
-                            self.finish(&[&decoder_task, &tracking_task, &encoder_task]).await;
-                        command.result_tx.send(result).unwrap();
-                        break;
-                    } else {
-                        command.result_tx.send(result).unwrap();
+                        self.finish(&[&decoder_task, &tracking_task, &encoder_task])
+                            .await.unwrap();
                     }
+                    command.result_tx.send(result).unwrap()
                 }
                 Some(state_request) = self.state_rx.recv() => {
                     state_request.result_tx.send(self.state.experiment.clone()).unwrap();
@@ -193,7 +191,10 @@ impl Core {
                     match image_result {
                         Ok(image) => {
                             self.state.experiment.last_image = Some(image.clone());
-                            self.start_tracking_task(&mut tracking_task, &tracking_tx, &image);
+                            self.start_tracking_task(
+                                &mut tracking_task,
+                                &tracking_tx,
+                                &image);
                             self.start_encoder_task(&mut encoder_task, &image);
                         }
                         Err(e) => {
@@ -206,7 +207,13 @@ impl Core {
                     // TODO: start next tracking task here, if there is a new image available
                     tracking_task = None;
                     match tracking_result {
-                        Ok((features, entities)) => {
+                        Ok((frame_number, features, entities)) => {
+                            self.robofish_commander_bridge.send(
+                                &entities,
+                                &self.state.experiment.arena,
+                                frame_number,
+                                self.state.experiment.target_fps
+                            ).await?;
                             self.state.handle_tracking_result(features, entities);
                         }
                         Err(e) => {
@@ -214,9 +221,45 @@ impl Core {
                         }
                     }
                 }
+                _ = self.robofish_commander_bridge.accept() => {
+                    eprintln!("Robofish commander connected");
+                }
             }
         }
         Ok(())
+    }
+
+    async fn handle_command(&mut self, command: Command, shutdown: &mut bool) -> Result<Empty> {
+        match command {
+            Command::PlaybackState(state) => {
+                self.state.set_playback_state(state)?;
+            }
+            Command::RecordingState(state) => {
+                self.state.set_recording_state(state)?;
+                if state == RecordingState::Finished as i32 {
+                    self.finish_recording().await?;
+                }
+            }
+            Command::Seek(frame) => {
+                self.state.seek(frame)?;
+            }
+            Command::OpenVideo(path) => {
+                self.state.open_video(path)?;
+            }
+            Command::VideoEncoderConfig(config) => {
+                self.state.initialize_video_encoder(config)?;
+            }
+            Command::AddEntity(_) => {
+                self.state.add_entity()?;
+            }
+            Command::RemoveEntity(_) => {
+                self.state.remove_entity()?;
+            }
+            Command::Shutdown(_) => {
+                *shutdown = true;
+            }
+        }
+        Ok(Empty {})
     }
 
     fn start_encoder_task(&mut self, encoder_task: &mut Option<JoinHandle<()>>, image: &Image) {
@@ -249,7 +292,7 @@ impl Core {
     fn start_tracking_task(
         &self,
         tracking_task: &mut Option<tokio::task::JoinHandle<()>>,
-        tracking_tx: &tokio::sync::mpsc::Sender<Result<(Features, Entities)>>,
+        tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features, Entities)>>,
         image: &Image,
     ) {
         if tracking_task.is_some() {
@@ -260,11 +303,13 @@ impl Core {
         let detector = self.state.feature_detector.clone().unwrap();
         let matcher = self.state.matcher.clone().unwrap();
         let last_entities = self.state.experiment.last_entities.clone();
+        let arena = self.state.experiment.arena.clone();
         let entity_count = self.state.experiment.entity_count;
         let tracking_tx = tracking_tx.clone();
         *tracking_task = Some(tokio::spawn(async move {
             let result =
-                Core::tracking_task(image, detector, matcher, entity_count, last_entities).await;
+                Core::tracking_task(image, detector, matcher, arena, entity_count, last_entities)
+                    .await;
             tracking_tx.send(result).await.unwrap();
         }));
     }
@@ -273,11 +318,19 @@ impl Core {
         image: Image,
         mut detector: FeatureDetectorClient<tonic::transport::Channel>,
         mut matcher: MatcherClient<tonic::transport::Channel>,
+        arena: Option<Arena>,
         expected_count: u32,
         last_entities: Option<Entities>,
-    ) -> Result<(Features, Entities)> {
+    ) -> Result<(u32, Features, Entities)> {
         let frame_number = image.frame_number;
-        let features = detector.detect_features(image).await?.into_inner();
+        let detector_request = DetectorRequest {
+            image: Some(image),
+            arena,
+        };
+        let features = detector
+            .detect_features(detector_request)
+            .await?
+            .into_inner();
         let matcher_request = MatcherRequest {
             features: Some(features.clone()),
             last_entities,
@@ -285,7 +338,7 @@ impl Core {
             frame_number,
         };
         let entities = matcher.match_features(matcher_request).await?.into_inner();
-        Ok((features, entities))
+        Ok((frame_number, features, entities))
     }
 
     fn start_decoder_task(

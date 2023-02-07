@@ -30,36 +30,6 @@ impl State {
         }
     }
 
-    pub fn handle_command(&mut self, command: Command, shutdown: &mut bool) -> Result<Empty> {
-        match command {
-            Command::PlaybackState(state) => {
-                self.set_playback_state(state)?;
-            }
-            Command::RecordingState(state) => {
-                self.set_recording_state(state)?;
-            }
-            Command::Seek(frame) => {
-                self.seek(frame)?;
-            }
-            Command::OpenVideo(path) => {
-                self.open_video(path)?;
-            }
-            Command::VideoEncoderConfig(config) => {
-                self.initialize_video_encoder(config)?;
-            }
-            Command::AddEntity(_) => {
-                self.add_entity()?;
-            }
-            Command::RemoveEntity(_) => {
-                self.remove_entity()?;
-            }
-            Command::Shutdown(_) => {
-                *shutdown = true;
-            }
-        }
-        Ok(Empty {})
-    }
-
     pub fn handle_tracking_result(&mut self, features: Features, entities: Entities) {
         let skeleton = entities.skeleton.clone();
         for entity in &entities.entities {
@@ -108,7 +78,7 @@ impl State {
         Ok(())
     }
 
-    fn set_recording_state(&mut self, recording_state: i32) -> Result<()> {
+    pub fn set_recording_state(&mut self, recording_state: i32) -> Result<()> {
         match RecordingState::from_i32(recording_state) {
             Some(RecordingState::Recording) => {
                 self.tracks.clear();
@@ -128,28 +98,28 @@ impl State {
         Ok(())
     }
 
-    fn initialize_video_encoder(&mut self, config: VideoEncoderConfig) -> Result<()> {
+    pub fn initialize_video_encoder(&mut self, config: VideoEncoderConfig) -> Result<()> {
         let encoder = VideoEncoder::new(config.clone())?;
         self.experiment.video_encoder_config = Some(config);
         self.video_encoder = Some(Arc::new(Mutex::new(encoder)));
         Ok(())
     }
 
-    fn remove_entity(&mut self) -> Result<()> {
+    pub fn remove_entity(&mut self) -> Result<()> {
         if self.experiment.entity_count > 0 {
             self.experiment.entity_count -= 1;
         }
         Ok(())
     }
 
-    fn seek(&mut self, frame: u32) -> Result<()> {
+    pub fn seek(&mut self, frame: u32) -> Result<()> {
         if let Some(decoder) = &mut self.video_decoder {
             decoder.lock().unwrap().seek(frame)?;
         }
         Ok(())
     }
 
-    fn set_playback_state(&mut self, playback_state: i32) -> Result<()> {
+    pub fn set_playback_state(&mut self, playback_state: i32) -> Result<()> {
         self.experiment.playback_state = playback_state;
         Ok(())
     }

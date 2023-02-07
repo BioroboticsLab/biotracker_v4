@@ -108,7 +108,9 @@ impl MatcherService {
             }
             let feature = features[feature_idx].clone();
             if *last_feature_idx >= last_entities.len() {
-                let id: u64 = rand::thread_rng().gen();
+                let mut id: u64 = rand::thread_rng().gen();
+                id = id % 1000;
+
                 last_entities.push(Entity {
                     id: id.to_string(),
                     feature: Some(feature),

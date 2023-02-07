@@ -4,15 +4,16 @@ import cv2
 import numpy as np
 import sleap
 import json
+import math
 
 import asyncio
 from grpclib.client import Channel
 from grpclib.server import Server
 
 class SLEAPTracker(FeatureDetectorBase):
-    async def detect_features(self, image: "Image") -> "Features":
+    async def detect_features(self, request: "DetectorRequest") -> "Features":
         try:
-            shared_img = SharedImage(image)
+            shared_img = SharedImage(request.image)
         except FileNotFoundError as e:
             raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, repr(e))
         buf = shared_img.as_numpy()
@@ -26,10 +27,11 @@ class SLEAPTracker(FeatureDetectorBase):
                                                prediction['centroid_vals'][0]):
             feature = Feature(score=instance_score)
             for peak, val in zip(peaks, vals):
-                scale_x = self.target_width / image.width
-                scale_y = self.target_width / image.width
+                scale_x = self.target_width / request.image.width
+                scale_y = self.target_width / request.image.width
                 node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
                 feature.nodes.append(node)
+            await self.calculate_pose(feature, request.arena, request.image)
             features.features.append(feature)
         return features
 
@@ -54,21 +56,35 @@ class SLEAPTracker(FeatureDetectorBase):
         sleap_skeleton = self.predictor.centroid_config.data.labels.skeletons[0]
         anchor_part = self.predictor.centroid_config.model.heads.centroid.anchor_part
         edges = []
-        center_node_index = -1
-        front_node_index = -1
         for from_idx, to_idx in sleap_skeleton.edge_inds:
             edges.append(SkeletonEdge(source=from_idx, target=to_idx))
         for i,name in enumerate(sleap_skeleton.node_names):
             if name == front_node:
-                front_node_index = i
+                self.front_node_index = i
             if name == center_node:
-                center_node_index = i
-        assert(front_node_index != -1 and center_node_index != -1)
+                self.center_node_index = i
+        assert(self.front_node_index is not None and self.center_node_index is not None)
         skeleton_descriptor = SkeletonDescriptor(edges=edges,
-                                                 node_names=sleap_skeleton.node_names,
-                                                 center_node_index=center_node_index,
-                                                 front_node_index=front_node_index)
+                                                 node_names=sleap_skeleton.node_names)
         self.skeleton = skeleton_descriptor
+
+    async def calculate_pose(self, feature, arena, image):
+        assert(len(feature.nodes) >= 2)
+        center = feature.nodes[self.center_node_index]
+        front = feature.nodes[self.front_node_index]
+        (x1, y1) = await self.pixel_to_world(center.x, center.y, arena, image)
+        (x2, y2) = await self.pixel_to_world(front.x, front.y, arena, image)
+        midline = np.array([x2 - x1, y2 - y1])
+        direction = midline / np.linalg.norm(midline)
+        orientation_rad = np.arctan2(direction[0], direction[1]) + np.pi / 2.0;
+        if math.isnan(orientation_rad):
+            # happens if center == front
+            orientation_rad = 0
+        feature.pose = Pose(x_cm=x1, y_cm=y1, orientation_rad=orientation_rad)
+
+    async def pixel_to_world(self, x, y, arena, image):
+        return [x * arena.width_cm / image.width - arena.width_cm / 2,
+                -(y * arena.height_cm / image.height - arena.height_cm / 2)]
 
 async def main():
     addr, port = get_address_and_port()
