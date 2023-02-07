@@ -304,12 +304,9 @@ impl Core {
         let matcher = self.state.matcher.clone().unwrap();
         let last_entities = self.state.experiment.last_entities.clone();
         let arena = self.state.experiment.arena.clone();
-        let entity_count = self.state.experiment.entity_count;
         let tracking_tx = tracking_tx.clone();
         *tracking_task = Some(tokio::spawn(async move {
-            let result =
-                Core::tracking_task(image, detector, matcher, arena, entity_count, last_entities)
-                    .await;
+            let result = Core::tracking_task(image, detector, matcher, arena, last_entities).await;
             tracking_tx.send(result).await.unwrap();
         }));
     }
@@ -319,7 +316,6 @@ impl Core {
         mut detector: FeatureDetectorClient<tonic::transport::Channel>,
         mut matcher: MatcherClient<tonic::transport::Channel>,
         arena: Option<Arena>,
-        expected_count: u32,
         last_entities: Option<Entities>,
     ) -> Result<(u32, Features, Entities)> {
         let frame_number = image.frame_number;
@@ -334,7 +330,6 @@ impl Core {
         let matcher_request = MatcherRequest {
             features: Some(features.clone()),
             last_entities,
-            expected_count,
             frame_number,
         };
         let entities = matcher.match_features(matcher_request).await?.into_inner();

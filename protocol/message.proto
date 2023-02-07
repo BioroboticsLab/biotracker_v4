@@ -35,7 +35,6 @@ message BioTrackerCommand {
 
 message ExperimentState {
     string base_directory = 1;
-    uint32 entity_count = 2;
     double target_fps = 3;
     VideoInfo video_info = 4;
     VideoEncoderConfig video_encoder_config = 5;
@@ -43,8 +42,8 @@ message ExperimentState {
     PlaybackState playback_state = 7;
     RecordingState recording_state = 8;
     optional Image last_image = 9;
-    optional Entities last_entities = 10;
-    optional Features last_features = 11;
+    Features last_features = 11;
+    Entities last_entities = 10;
 }
 
 service BioTracker {
@@ -66,9 +65,8 @@ service FeatureDetector {
 
 message MatcherRequest {
     Features features = 1;
-    uint32 expected_count = 3;
     uint32 frame_number = 4;
-    optional Entities last_entities = 2;
+    Entities last_entities = 2;
 }
 
 service Matcher {
@@ -78,7 +76,7 @@ service Matcher {
 
 message TrackSaveRequest {
     ExperimentState experiment_state = 1;
-    map<string, Track> tracks = 12;
+    map<uint32, Track> tracks = 12;
     string save_path = 3;
 }
 

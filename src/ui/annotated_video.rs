@@ -202,6 +202,7 @@ impl AnnotatedVideo {
             ),
             response.rect,
         );
+        let mut skeleton = None;
         if let Some(features) = &ctx.current_features {
             if self.draw_features {
                 for feature in &features.features {
@@ -215,19 +216,15 @@ impl AnnotatedVideo {
                     );
                 }
             }
+            skeleton = features.skeleton.clone();
         }
         if let Some(entities) = &ctx.current_entities {
             if self.draw_entities {
                 for entity in &entities.entities {
-                    let color = self.color_palette.pick(&entity.id);
-                    self.paint_feature(
-                        &painter,
-                        &to_screen,
-                        entity.feature.as_ref().expect("Entity without feature"),
-                        &entities.skeleton,
-                        color,
-                        scale,
-                    );
+                    if let Some(feature) = &entity.feature {
+                        let color = self.color_palette.pick(entity.id);
+                        self.paint_feature(&painter, &to_screen, feature, &skeleton, color, scale);
+                    }
                 }
             }
         }

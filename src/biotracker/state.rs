@@ -10,9 +10,10 @@ pub struct State {
     pub feature_detector: Option<FeatureDetectorClient<tonic::transport::Channel>>,
     pub matcher: Option<MatcherClient<tonic::transport::Channel>>,
     pub track_recorder: Option<TrackRecorderClient<tonic::transport::Channel>>,
-    pub tracks: HashMap<String, Track>,
+    pub tracks: HashMap<u32, Track>,
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
+    entity_counter: u32,
 }
 
 impl State {
@@ -23,6 +24,7 @@ impl State {
                 arena: Some(config.arena.clone()),
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
+                last_entities: Some(Entities { entities: vec![] }),
                 ..Default::default()
             },
             config,
@@ -31,11 +33,11 @@ impl State {
     }
 
     pub fn handle_tracking_result(&mut self, features: Features, entities: Entities) {
-        let skeleton = entities.skeleton.clone();
+        let skeleton = features.skeleton.clone();
         for entity in &entities.entities {
             if !self.tracks.contains_key(&entity.id) {
                 self.tracks.insert(
-                    entity.id.clone(),
+                    entity.id,
                     Track {
                         skeleton: skeleton.clone(),
                         observations: Vec::new(),
@@ -74,7 +76,17 @@ impl State {
     }
 
     pub fn add_entity(&mut self) -> Result<()> {
-        self.experiment.entity_count += 1;
+        self.experiment
+            .last_entities
+            .as_mut()
+            .expect("no entities found")
+            .entities
+            .push(Entity {
+                id: self.entity_counter,
+                frame_number: 0,
+                feature: None,
+            });
+        self.entity_counter += 1;
         Ok(())
     }
 
@@ -106,9 +118,12 @@ impl State {
     }
 
     pub fn remove_entity(&mut self) -> Result<()> {
-        if self.experiment.entity_count > 0 {
-            self.experiment.entity_count -= 1;
-        }
+        self.experiment
+            .last_entities
+            .as_mut()
+            .expect("no entities found")
+            .entities
+            .pop();
         Ok(())
     }
 
