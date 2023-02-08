@@ -161,8 +161,8 @@ impl Core {
         let mut fps_interval = tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps));
         fps_interval.tick().await;
 
-        let mut decoder_task = None;
-        let mut tracking_task = None;
+        let mut decoder_task: Option<tokio::task::JoinHandle<()>> = None;
+        let mut tracking_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut encoder_task = None;
         let (decoder_tx, mut decoder_rx) = channel(16);
         let (tracking_tx, mut tracking_rx) = channel(16);
@@ -175,8 +175,12 @@ impl Core {
                     let result = self.handle_command(command.request.clone()).await;
                     match command.request {
                         Command::Seek(_) => {
-                            decoder_task = None;
-                            tracking_task = None;
+                            if let Some(task) = decoder_task.take() {
+                                task.abort();
+                            }
+                            if let Some(task) = tracking_task.take() {
+                                task.abort();
+                            }
                             self.start_decoder_task(&mut decoder_task, &decoder_tx);
                         },
                         Command::Shutdown(_) => {
@@ -211,10 +215,12 @@ impl Core {
                     match image_result {
                         Ok(image) => {
                             self.state.experiment.last_image = Some(image.clone());
-                            self.start_tracking_task(
-                                &mut tracking_task,
-                                &tracking_tx,
-                                &image);
+                            if tracking_task.is_none() {
+                                self.start_tracking_task(
+                                    &mut tracking_task,
+                                    &tracking_tx,
+                                    &image);
+                            }
                             self.start_encoder_task(&mut encoder_task, &image);
                         }
                         Err(e) => {
@@ -224,7 +230,6 @@ impl Core {
                     }
                 }
                 Some(tracking_result) = tracking_rx.recv() => {
-                    // TODO: start next tracking task here, if there is a new image available
                     tracking_task = None;
                     match tracking_result {
                         Ok((frame_number, features, entities)) => {
@@ -235,6 +240,14 @@ impl Core {
                                 self.state.experiment.target_fps
                             ).await?;
                             self.state.handle_tracking_result(frame_number, features, entities);
+                            if let Some(image) =  &self.state.experiment.last_image {
+                                if image.frame_number != frame_number {
+                                    self.start_tracking_task(
+                                        &mut tracking_task,
+                                        &tracking_tx,
+                                        &image);
+                                }
+                            }
                         }
                         Err(e) => {
                             eprintln!("Error while tracking: {}", e);
@@ -316,10 +329,6 @@ impl Core {
         tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features, Entities)>>,
         image: &Image,
     ) {
-        if tracking_task.is_some() {
-            return;
-        }
-
         let image = image.clone();
         let detector = self.state.feature_detector.clone().unwrap();
         let matcher = self.state.matcher.clone().unwrap();
