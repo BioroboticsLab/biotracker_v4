@@ -24,6 +24,7 @@ impl State {
                 arena: Some(config.arena.clone()),
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
+                realtime_mode: true,
                 last_entities: Some(Entities { entities: vec![] }),
                 ..Default::default()
             },

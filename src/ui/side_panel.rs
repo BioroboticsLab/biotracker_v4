@@ -25,6 +25,14 @@ impl SidePanel {
                             .command(Command::RemoveEntity("".to_string()))
                             .unwrap();
                     }
+                    if ui
+                        .checkbox(&mut ctx.experiment.realtime_mode, "Realtime Tracking")
+                        .changed()
+                    {
+                        ctx.bt
+                            .command(Command::RealtimeMode(ctx.experiment.realtime_mode))
+                            .unwrap();
+                    }
                     match RecordingState::from_i32(ctx.experiment.recording_state).unwrap() {
                         RecordingState::Initial | RecordingState::Finished => {
                             egui::ComboBox::from_label("Select Recording Image")

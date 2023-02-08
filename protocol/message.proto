@@ -24,6 +24,7 @@ message BioTrackerCommand {
     oneof command {
         PlaybackState playback_state = 1;
         RecordingState recording_state = 2;
+        bool realtime_mode = 9;
         uint32 seek = 3;
         string open_video = 4;
         string add_entity = 5;
@@ -41,6 +42,7 @@ message Experiment {
     Arena arena = 6;
     PlaybackState playback_state = 7;
     RecordingState recording_state = 8;
+    bool realtime_mode = 12;
     optional Image last_image = 9;
     Features last_features = 11;
     Entities last_entities = 10;

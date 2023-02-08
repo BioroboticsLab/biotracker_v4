@@ -135,6 +135,10 @@ impl Core {
                 self.state.add_entity().unwrap();
             }
         }
+
+        if let Some(realtime) = &self.args.realtime {
+            self.state.experiment.realtime_mode = *realtime;
+        }
         Ok(())
     }
 
@@ -180,7 +184,9 @@ impl Core {
                     state_request.result_tx.send(self.state.experiment.clone()).unwrap();
                 }
                 _ = image_timer => {
-                    self.start_decoder_task(&mut decoder_task, &decoder_tx);
+                    if self.state.experiment.realtime_mode || tracking_task.is_none() {
+                        self.start_decoder_task(&mut decoder_task, &decoder_tx);
+                    }
                 }
                 Some(image_request) = self.image_rx.recv() => {
                     self.start_encoder_task(&mut encoder_task, &image_request.request);
@@ -239,6 +245,9 @@ impl Core {
                 if state == RecordingState::Finished as i32 {
                     self.finish_recording().await?;
                 }
+            }
+            Command::RealtimeMode(wait) => {
+                self.state.experiment.realtime_mode = wait;
             }
             Command::Seek(frame) => {
                 self.state.seek(frame)?;
