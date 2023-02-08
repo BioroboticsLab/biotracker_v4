@@ -31,14 +31,11 @@ class TrackRecorder(TrackRecorderBase):
         self.hz = experiment.target_fps
         recorded_entities = {}
 
-        start_frame_number = 2**32
-        for track in tracks.values():
-            start_frame_number = min(start_frame_number, track.observations[0].frame_number)
-        loop.run_in_executor(None, lambda: self.save_tracks(
-            filename, start_frame_number, tracks))
+        loop.run_in_executor(None, lambda: self.save_tracks(filename, tracks))
         return Empty()
 
-    def save_tracks(self, filename, start_frame_number, tracks):
+    def save_tracks(self, filename, tracks):
+        tracks, start_frame_number = self.preprocess_tracks(tracks)
         path = filename + '.hdf5'
         with robofish.io.File(path, mode='w', world_size_cm=self.world_size_cm, frequency_hz=self.hz) as f:
             for id, track in tracks.items():
@@ -48,11 +45,20 @@ class TrackRecorder(TrackRecorderBase):
         if len(tracks) > 0:
             self.plot(f, path)
 
-    def track_to_poses(self, track, min_frame_number):
+    def preprocess_tracks(self, tracks):
+        processed = {}
+        min_frame_number = 2**32
+        for id, track in tracks.items():
+            track = sorted(track.observations.items(), key=lambda x: x[0])
+            min_frame_number = min(min_frame_number, track[0][0])
+            processed[id] = track
+        return (processed, min_frame_number)
+
+    def track_to_poses(self, track, start_frame_number):
         poses = []
-        last_frame_number = min_frame_number - 1
         nan_pose = [np.nan] * 4
-        for entity in track.observations:
+        last_frame_number = start_frame_number - 1
+        for frame_number, entity in track:
             pose = entity.feature.pose
             pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
             if entity.frame_number > last_frame_number + 1:

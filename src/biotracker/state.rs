@@ -33,7 +33,12 @@ impl State {
         }
     }
 
-    pub fn handle_tracking_result(&mut self, features: Features, entities: Entities) {
+    pub fn handle_tracking_result(
+        &mut self,
+        frame_number: u32,
+        features: Features,
+        entities: Entities,
+    ) {
         let skeleton = features.skeleton.clone();
         for entity in &entities.entities {
             if !self.tracks.contains_key(&entity.id) {
@@ -41,20 +46,14 @@ impl State {
                     entity.id,
                     Track {
                         skeleton: skeleton.clone(),
-                        observations: Vec::new(),
+                        observations: HashMap::new(),
                     },
                 );
             }
             let track = self.tracks.get_mut(&entity.id).expect("track not found");
-            if let Some(last_observation) = track.observations.last() {
-                let last_seen = last_observation.frame_number;
-                assert!(last_seen <= entity.frame_number);
-                if last_seen == entity.frame_number {
-                    continue;
-                }
-            }
-            track.observations.push(entity.clone());
+            track.observations.insert(frame_number, entity.clone());
         }
+
         self.experiment.last_features = Some(features);
         self.experiment.last_entities = Some(entities);
     }

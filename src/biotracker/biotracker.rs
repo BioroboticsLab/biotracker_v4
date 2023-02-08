@@ -161,22 +161,31 @@ impl Core {
         let mut fps_interval = tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps));
         fps_interval.tick().await;
 
-        let mut shutdown = false;
         let mut decoder_task = None;
         let mut tracking_task = None;
         let mut encoder_task = None;
         let (decoder_tx, mut decoder_rx) = channel(16);
         let (tracking_tx, mut tracking_rx) = channel(16);
 
-        while !shutdown {
+        loop {
             let image_timer = fps_interval.tick();
 
             tokio::select! {
                 Some(command) = self.command_rx.recv() => {
-                    let result = self.handle_command(command.request, &mut shutdown).await;
-                    if shutdown {
-                        self.finish(&[&decoder_task, &tracking_task, &encoder_task])
-                            .await.unwrap();
+                    let result = self.handle_command(command.request.clone()).await;
+                    match command.request {
+                        Command::Seek(_) => {
+                            decoder_task = None;
+                            tracking_task = None;
+                            self.start_decoder_task(&mut decoder_task, &decoder_tx);
+                        },
+                        Command::Shutdown(_) => {
+                            self.finish(&[&decoder_task, &tracking_task, &encoder_task])
+                                .await.unwrap();
+                            command.result_tx.send(Ok(Empty {})).unwrap();
+                            break;
+                        },
+                        _ => {}
                     }
                     command.result_tx.send(result).unwrap()
                 }
@@ -184,8 +193,13 @@ impl Core {
                     state_request.result_tx.send(self.state.experiment.clone()).unwrap();
                 }
                 _ = image_timer => {
-                    if self.state.experiment.realtime_mode || tracking_task.is_none() {
-                        self.start_decoder_task(&mut decoder_task, &decoder_tx);
+                    if self.state.experiment.playback_state == PlaybackState::Playing as i32 &&
+                        (self.state.experiment.realtime_mode || tracking_task.is_none()) {
+                        if decoder_task.is_some() {
+                            eprintln!("VideoDecoder too slow, dropping frame");
+                        } else {
+                            self.start_decoder_task(&mut decoder_task, &decoder_tx);
+                        }
                     }
                 }
                 Some(image_request) = self.image_rx.recv() => {
@@ -220,7 +234,7 @@ impl Core {
                                 frame_number,
                                 self.state.experiment.target_fps
                             ).await?;
-                            self.state.handle_tracking_result(features, entities);
+                            self.state.handle_tracking_result(frame_number, features, entities);
                         }
                         Err(e) => {
                             eprintln!("Error while tracking: {}", e);
@@ -235,7 +249,7 @@ impl Core {
         Ok(())
     }
 
-    async fn handle_command(&mut self, command: Command, shutdown: &mut bool) -> Result<Empty> {
+    async fn handle_command(&mut self, command: Command) -> Result<Empty> {
         match command {
             Command::PlaybackState(state) => {
                 self.state.set_playback_state(state)?;
@@ -264,9 +278,7 @@ impl Core {
             Command::RemoveEntity(_) => {
                 self.state.remove_entity()?;
             }
-            Command::Shutdown(_) => {
-                *shutdown = true;
-            }
+            Command::Shutdown(_) => {}
         }
         Ok(Empty {})
     }
@@ -350,15 +362,6 @@ impl Core {
         decoder_task: &mut Option<tokio::task::JoinHandle<()>>,
         result_tx: &Sender<Result<Image>>,
     ) {
-        if decoder_task.is_some() {
-            eprintln!("VideoDecoder too slow, dropping frame");
-            return;
-        }
-
-        if self.state.experiment.playback_state != PlaybackState::Playing as i32 {
-            return;
-        }
-
         let result_tx = result_tx.clone();
         if let Some(decoder) = &self.state.video_decoder {
             let decoder = decoder.clone();

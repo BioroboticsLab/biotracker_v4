@@ -31,7 +31,8 @@ message Entities {
 
 message Track {
   SkeletonDescriptor skeleton = 3;
-  repeated Entity observations = 1;
+  // map from frame number to entity
+  map<uint32, Entity> observations = 4;
 }
 
 message SkeletonNode {

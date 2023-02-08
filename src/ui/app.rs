@@ -134,6 +134,7 @@ impl BioTrackerUI {
                 render_state,
                 &self.components.offscreen_renderer.render_state,
             );
+            self.context.current_frame_number = image.frame_number;
         }
     }
 
@@ -143,6 +144,40 @@ impl BioTrackerUI {
         self.context.current_features = self.context.experiment.last_features.clone();
         self.context.current_entities = self.context.experiment.last_entities.clone();
     }
+
+    fn handle_shortcuts(&mut self, ctx: &egui::Context) -> Result<()> {
+        if ctx.input().key_pressed(egui::Key::ArrowRight) {
+            self.context
+                .bt
+                .command(Command::Seek(self.context.current_frame_number + 1))?;
+        }
+        if ctx.input().key_pressed(egui::Key::ArrowLeft) {
+            if self.context.current_frame_number > 0 {
+                self.context
+                    .bt
+                    .command(Command::Seek(self.context.current_frame_number - 1))?;
+            }
+        }
+        if ctx.input().key_pressed(egui::Key::Space) {
+            match PlaybackState::from_i32(self.context.experiment.playback_state).unwrap() {
+                PlaybackState::Playing => {
+                    self.context
+                        .bt
+                        .command(Command::PlaybackState(PlaybackState::Paused as i32))?;
+                }
+                PlaybackState::Paused | PlaybackState::Stopped => {
+                    self.context
+                        .bt
+                        .command(Command::PlaybackState(PlaybackState::Playing as i32))?;
+                }
+                _ => {}
+            }
+            self.context
+                .bt
+                .command(Command::Seek(self.context.current_frame_number - 1))?;
+        }
+        Ok(())
+    }
 }
 
 impl eframe::App for BioTrackerUI {
@@ -151,6 +186,7 @@ impl eframe::App for BioTrackerUI {
             .video_view
             .update_scale(ctx.input().zoom_delta());
         self.update_context(frame);
+        self.handle_shortcuts(ctx).unwrap();
 
         // Window menu
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
