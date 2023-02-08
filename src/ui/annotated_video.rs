@@ -130,10 +130,7 @@ impl AnnotatedVideo {
                 if from.any_nan() || to.any_nan() {
                     continue;
                 }
-                painter.line_segment(
-                    [from, to],
-                    egui::Stroke::new(2.0 * scale, egui::Color32::WHITE),
-                );
+                painter.line_segment([from, to], egui::Stroke::new(2.0 * scale, color));
             }
         }
         for node in nodes {
@@ -144,7 +141,7 @@ impl AnnotatedVideo {
             painter.circle(
                 point,
                 1.5 * scale,
-                color,
+                egui::Color32::WHITE,
                 egui::Stroke::new(1.0, egui::Color32::BLACK),
             )
         }
