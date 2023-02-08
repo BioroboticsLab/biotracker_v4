@@ -33,7 +33,7 @@ message BioTrackerCommand {
     }
 }
 
-message ExperimentState {
+message Experiment {
     string base_directory = 1;
     double target_fps = 3;
     VideoInfo video_info = 4;
@@ -47,7 +47,7 @@ message ExperimentState {
 }
 
 service BioTracker {
-    rpc get_state(Empty) returns (ExperimentState) {}
+    rpc get_state(Empty) returns (Experiment) {}
     rpc command(BioTrackerCommand) returns (Empty) {}
     rpc add_image(Image) returns (Empty) {}
     // rpc log(LogRequest) returns (Empty); // TODO
@@ -75,7 +75,7 @@ service Matcher {
 }
 
 message TrackSaveRequest {
-    ExperimentState experiment_state = 1;
+    Experiment experiment = 1;
     map<uint32, Track> tracks = 12;
     string save_path = 3;
 }

@@ -24,7 +24,7 @@ impl BioTrackerController {
         Self { client, rt }
     }
 
-    pub fn get_state(&mut self) -> Result<ExperimentState> {
+    pub fn get_state(&mut self) -> Result<Experiment> {
         let BioTrackerController { client, rt } = self;
         let response = rt.block_on(async move {
             let request = tonic::Request::new(Empty {});

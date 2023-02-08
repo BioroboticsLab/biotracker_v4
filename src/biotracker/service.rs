@@ -1,6 +1,6 @@
 use super::{
     bio_tracker_server::BioTracker,
-    protocol::{Command, Empty, ExperimentState, Image},
+    protocol::{Command, Empty, Experiment, Image},
     BioTrackerCommand, ChannelRequest,
 };
 use anyhow::Result;
@@ -9,13 +9,13 @@ use tonic::{Request, Response, Status};
 
 pub struct Service {
     pub command_tx: Sender<ChannelRequest<Command, Result<Empty>>>,
-    pub state_tx: Sender<ChannelRequest<(), ExperimentState>>,
+    pub state_tx: Sender<ChannelRequest<(), Experiment>>,
     pub image_tx: Sender<ChannelRequest<Image, Result<Empty>>>,
 }
 
 #[tonic::async_trait]
 impl BioTracker for Service {
-    async fn get_state(&self, _: Request<Empty>) -> Result<Response<ExperimentState>, Status> {
+    async fn get_state(&self, _: Request<Empty>) -> Result<Response<Experiment>, Status> {
         Ok(Response::new(
             ChannelRequest::send(self.state_tx.clone(), ())
                 .await

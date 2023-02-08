@@ -18,7 +18,7 @@ pub struct Core {
     image_rx: Receiver<ChannelRequest<Image, Result<Empty>>>,
     python_processes: Vec<PythonProcess>,
     state: State,
-    state_rx: Receiver<ChannelRequest<(), ExperimentState>>,
+    state_rx: Receiver<ChannelRequest<(), Experiment>>,
     robofish_commander_bridge: RobofishCommander,
 }
 
@@ -363,7 +363,7 @@ impl Core {
 
     async fn finish_recording(&mut self) -> Result<()> {
         let save_request = TrackSaveRequest {
-            experiment_state: Some(self.state.experiment.clone()),
+            experiment: Some(self.state.experiment.clone()),
             tracks: self.state.tracks.clone(),
             save_path: "test".to_string(),
         };

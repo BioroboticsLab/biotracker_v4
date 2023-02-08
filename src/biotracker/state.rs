@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Default)]
 pub struct State {
     pub config: BiotrackerConfig,
-    pub experiment: ExperimentState,
+    pub experiment: Experiment,
     pub feature_detector: Option<FeatureDetectorClient<tonic::transport::Channel>>,
     pub matcher: Option<MatcherClient<tonic::transport::Channel>>,
     pub track_recorder: Option<TrackRecorderClient<tonic::transport::Channel>>,
@@ -19,7 +19,7 @@ pub struct State {
 impl State {
     pub fn new(config: BiotrackerConfig) -> Self {
         Self {
-            experiment: ExperimentState {
+            experiment: Experiment {
                 target_fps: 25.0,
                 arena: Some(config.arena.clone()),
                 playback_state: PlaybackState::Paused as i32,

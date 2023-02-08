@@ -15,7 +15,7 @@ pub struct PersistentState {
 
 pub struct BioTrackerUIContext {
     pub bt: BioTrackerController,
-    pub experiment: ExperimentState,
+    pub experiment: Experiment,
     pub persistent_state: PersistentState,
     pub current_frame_number: u32,
     pub seek_target: u32,
@@ -70,7 +70,7 @@ impl BioTrackerUI {
         Some(Self {
             context: BioTrackerUIContext {
                 bt,
-                experiment: ExperimentState::default(),
+                experiment: Experiment::default(),
                 persistent_state,
                 current_frame_number: 0,
                 seek_target: 0,

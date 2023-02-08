@@ -25,7 +25,7 @@ class TrackRecorder(TrackRecorderBase):
     async def save(self, track_save_request: "TrackSaveRequest") -> "Empty":
         tracks = track_save_request.tracks
         filename = track_save_request.save_path
-        experiment = track_save_request.experiment_state
+        experiment = track_save_request.experiment
         self.world_size_cm = (experiment.arena.width_cm,
                               experiment.arena.height_cm)
         self.hz = experiment.target_fps
