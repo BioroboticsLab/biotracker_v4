@@ -9,6 +9,7 @@ mod util;
 
 fn main() {
     let args = CommandLineArguments::parse();
+    let args_copy = args.clone();
 
     let rt = Arc::new(
         tokio::runtime::Builder::new_current_thread()
@@ -21,8 +22,14 @@ fn main() {
         .name("BioTrackerCore".to_string())
         .spawn(move || {
             rt.block_on(async move {
-                Core::new(&args).await.unwrap().run().await.unwrap();
-                Ok(())
+                match Core::new(&args).await {
+                    Ok(core) => {
+                        core.run().await.unwrap();
+                    }
+                    Err(e) => {
+                        println!("Failed to start BioTracker Core: {}", e);
+                    }
+                }
             })
         })
         .unwrap();
@@ -39,7 +46,7 @@ fn main() {
             },
             ..Default::default()
         },
-        Box::new(|cc| Box::new(BioTrackerUI::new(cc, rt_clone, core_thread).unwrap())),
+        Box::new(|cc| Box::new(BioTrackerUI::new(cc, rt_clone, core_thread, args_copy).unwrap())),
     )
     .unwrap();
 }

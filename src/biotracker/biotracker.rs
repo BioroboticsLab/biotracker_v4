@@ -60,13 +60,18 @@ impl Core {
             state_tx,
             image_tx,
         });
-        let biotracker_address = "[::1]:33072".parse().unwrap();
+        let address = format!("127.0.0.1:{}", args.port).parse().unwrap();
         tokio::spawn(async move {
-            Server::builder()
+            match Server::builder()
                 .add_service(biotracker_server)
-                .serve(biotracker_address)
+                .serve(address)
                 .await
-                .unwrap();
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Failed to start BioTracker Service: {}", e);
+                }
+            };
         });
 
         Ok(Self {
@@ -128,6 +133,10 @@ impl Core {
 
         if let Some(video) = &self.args.video {
             self.state.open_video(video.to_owned()).unwrap();
+        }
+
+        if let Some(seek) = &self.args.seek {
+            self.state.seek(*seek).unwrap();
         }
 
         if let Some(count) = &self.args.entity_count {
@@ -408,11 +417,16 @@ impl Core {
                     tokio::spawn(async move {
                         let matcher_service = Arc::new(MatcherService::new());
                         let matcher_server = MatcherServer::from_arc(matcher_service.clone());
-                        Server::builder()
+                        match Server::builder()
                             .add_service(matcher_server)
                             .serve(address.parse().unwrap())
                             .await
-                            .unwrap();
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("HungarianMatcher failed: {}", e);
+                            }
+                        };
                     });
                 }
                 _ => panic!("Unknown component {}", config.id),

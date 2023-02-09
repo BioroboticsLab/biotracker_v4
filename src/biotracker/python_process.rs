@@ -9,7 +9,7 @@ pub struct PythonProcess {
 impl PythonProcess {
     pub fn new(config: &ComponentConfig, python_config: &PythonConfig) -> Result<Self> {
         let commandline = format!(
-            "BIOTRACKER_COMPONENT_ADDRESS='{}' . {}/bin/activate && python3 {}",
+            "export BIOTRACKER_COMPONENT_ADDRESS='{}'; . {}/bin/activate && python3 {}",
             config.address, python_config.venv, python_config.cmd
         );
         let child = std::process::Command::new("/bin/sh")

@@ -18,4 +18,10 @@ pub struct CommandLineArguments {
     /// Path to configuration json
     #[arg(long)]
     pub config: PathBuf,
+    /// Port for biotracker core
+    #[arg(long, default_value_t = 27342)]
+    pub port: u32,
+    /// Seek to frame
+    #[arg(long)]
+    pub seek: Option<u32>,
 }

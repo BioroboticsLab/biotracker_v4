@@ -2,7 +2,7 @@ use super::{
     annotated_video::AnnotatedVideo, controller::BioTrackerController,
     offscreen_renderer::OffscreenRenderer, side_panel::SidePanel,
 };
-use crate::biotracker::protocol::*;
+use crate::biotracker::{protocol::*, CommandLineArguments};
 use anyhow::{anyhow, Result};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -37,19 +37,21 @@ pub struct BioTrackerUIComponents {
 pub struct BioTrackerUI {
     components: BioTrackerUIComponents,
     context: BioTrackerUIContext,
-    core_thread: Option<JoinHandle<Result<()>>>,
+    core_thread: Option<JoinHandle<()>>,
 }
 
 impl BioTrackerUI {
     pub fn new(
         cc: &eframe::CreationContext,
         rt: Arc<tokio::runtime::Runtime>,
-        core_thread: JoinHandle<Result<()>>,
+        core_thread: JoinHandle<()>,
+        args: CommandLineArguments,
     ) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
         cc.egui_ctx.set_pixels_per_point(1.5);
 
-        let bt = BioTrackerController::new("http://[::1]:33072".to_string(), rt.clone());
+        let address = format!("http://127.0.0.1:{}", args.port);
+        let bt = BioTrackerController::new(address, rt.clone());
 
         let persistent_state = PersistentState {
             dark_mode: false,
@@ -300,11 +302,6 @@ impl eframe::App for BioTrackerUI {
             .bt
             .command(Command::Shutdown(Empty {}))
             .unwrap();
-        match self.core_thread.take().unwrap().join().unwrap() {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("Biotrcker Core died: {}", e);
-            }
-        }
+        self.core_thread.take().unwrap().join();
     }
 }
