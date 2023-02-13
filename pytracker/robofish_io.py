@@ -35,11 +35,11 @@ class TrackRecorder(TrackRecorderBase):
         return Empty()
 
     def save_tracks(self, filename, tracks):
-        tracks, start_frame_number = self.preprocess_tracks(tracks)
+        tracks, start_frame_number, skeleton = self.preprocess_tracks(tracks)
         path = filename + '.hdf5'
         with robofish.io.File(path, mode='w', world_size_cm=self.world_size_cm, frequency_hz=self.hz) as f:
             for id, track in tracks.items():
-                poses = self.track_to_poses(track, start_frame_number)
+                (poses,outlines) = self.track_to_poses(track, start_frame_number, skeleton)
                 f.create_entity(category='organism', name=f'fish_{id}', poses=poses)
 
         if len(tracks) > 0:
@@ -49,25 +49,35 @@ class TrackRecorder(TrackRecorderBase):
         processed = {}
         min_frame_number = 2**32
         for id, track in tracks.items():
+            skeleton = track.skeleton
             track = sorted(track.observations.items(), key=lambda x: x[0])
             min_frame_number = min(min_frame_number, track[0][0])
             processed[id] = track
-        return (processed, min_frame_number)
+        return (processed, min_frame_number, skeleton)
 
-    def track_to_poses(self, track, start_frame_number):
+    def track_to_poses(self, track, start_frame_number, skeleton):
         poses = []
+        skeletons = []
         nan_pose = [np.nan] * 4
         last_frame_number = start_frame_number - 1
+        n_nodes = len(skeleton.node_names)
+        nan_nodes = [[np.nan, np.nan] for _ in range(n_nodes)]
         for frame_number, entity in track:
             pose = entity.feature.pose
+
             pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
             if entity.frame_number > last_frame_number + 1:
                 fill_nan_start = last_frame_number + 1
                 fill_nan_end = entity.frame_number
                 poses.extend([nan_pose] * (fill_nan_end - fill_nan_start))
+                skeletons.extend([nan_nodes] * (fill_nan_end - fill_nan_start))
+            nodes = []
+            for node in entity.feature.nodes:
+                nodes.append([node.x, node.y])
+            skeletons.append(nodes)
             poses.append(pose)
             last_frame_number = entity.frame_number
-        return np.array(poses)
+        return (np.array(poses), np.array(skeletons))
 
     def plot(self, f, filename):
         os.system('robofish-io-evaluate tracks ' + filename)
