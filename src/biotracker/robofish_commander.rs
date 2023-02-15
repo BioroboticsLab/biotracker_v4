@@ -11,8 +11,8 @@ pub struct RobofishCommander {
 }
 
 impl RobofishCommander {
-    pub async fn new() -> Result<Self> {
-        let addr = "127.0.0.1:54444";
+    pub async fn new(port: u32) -> Result<Self> {
+        let addr = format!("127.0.0.1:{}", port);
         let listener = TcpListener::bind(addr).await?;
         Ok(RobofishCommander {
             listener,

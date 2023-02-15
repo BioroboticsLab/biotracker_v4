@@ -21,6 +21,9 @@ pub struct CommandLineArguments {
     /// Port for biotracker core
     #[arg(long, default_value_t = 27342)]
     pub port: u32,
+    /// Port for robofish commander API
+    #[arg(long, default_value_t = 54444)]
+    pub robofish_port: u32,
     /// Seek to frame
     #[arg(long)]
     pub seek: Option<u32>,

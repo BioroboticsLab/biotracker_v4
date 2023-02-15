@@ -73,15 +73,14 @@ impl Core {
                 }
             };
         });
-
         Ok(Self {
+            robofish_commander_bridge: RobofishCommander::new(args.robofish_port).await?,
             args,
             command_rx,
             image_rx,
             python_processes: vec![],
             state,
             state_rx,
-            robofish_commander_bridge: RobofishCommander::new().await?,
         })
     }
 
