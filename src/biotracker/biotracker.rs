@@ -60,7 +60,7 @@ impl Core {
             state_tx,
             image_tx,
         });
-        let address = format!("127.0.0.1:{}", args.port).parse().unwrap();
+        let address = format!("127.0.0.1:{}", args.port).parse()?;
         tokio::spawn(async move {
             match Server::builder()
                 .add_service(biotracker_server)
@@ -87,7 +87,7 @@ impl Core {
     pub async fn init(&mut self) -> Result<()> {
         let components = self.state.config.components.clone();
         for component in &components {
-            self.start_component(component.clone()).await.unwrap();
+            self.start_component(component.clone()).await?;
         }
         for component in &components {
             for client in self.connect_component(&component).await? {
@@ -131,16 +131,16 @@ impl Core {
         }
 
         if let Some(video) = &self.args.video {
-            self.state.open_video(video.to_owned()).unwrap();
+            self.state.open_video(video.to_owned())?;
         }
 
         if let Some(seek) = &self.args.seek {
-            self.state.seek(*seek).unwrap();
+            self.state.seek(*seek)?;
         }
 
         if let Some(count) = &self.args.entity_count {
             for _ in 0..*count {
-                self.state.add_entity().unwrap();
+                self.state.add_entity()?;
             }
         }
 
@@ -193,13 +193,13 @@ impl Core {
                         },
                         Command::Shutdown(_) => {
                             self.finish(&[&decoder_task, &tracking_task, &encoder_task])
-                                .await.unwrap();
+                                .await?;
                             command.result_tx.send(Ok(Empty {})).unwrap();
                             break;
                         },
                         _ => {}
                     }
-                    command.result_tx.send(result).unwrap()
+                    command.result_tx.send(result).unwrap();
                 }
                 Some(state_request) = self.state_rx.recv() => {
                     state_request.result_tx.send(self.state.experiment.clone()).unwrap();
@@ -319,15 +319,28 @@ impl Core {
             return;
         }
 
-        let encoder_config = &self.state.experiment.video_encoder_config.as_ref().unwrap();
+        let encoder_config = &self
+            .state
+            .experiment
+            .video_encoder_config
+            .as_ref()
+            .expect("VideoEncoder Config not set");
         if encoder_config.image_stream_id != image.stream_id {
             return;
         }
 
-        let encoder = self.state.video_encoder.clone().unwrap();
+        let encoder = self
+            .state
+            .video_encoder
+            .clone()
+            .expect("VideoEncoder not running");
         let image = image.clone();
         *encoder_task = Some(tokio::task::spawn_blocking(move || {
-            encoder.lock().unwrap().add_image(image).unwrap();
+            encoder
+                .lock()
+                .unwrap()
+                .add_image(image)
+                .expect("Error while encoding image");
         }));
     }
 
@@ -338,7 +351,11 @@ impl Core {
         image: &Image,
     ) {
         let image = image.clone();
-        let detector = self.state.feature_detector.clone().unwrap();
+        let detector = self
+            .state
+            .feature_detector
+            .clone()
+            .expect("Feature Detector not running");
         let matcher = self.state.matcher.clone().unwrap();
         let last_entities = self
             .state
@@ -419,7 +436,7 @@ impl Core {
         self.state
             .track_recorder
             .as_mut()
-            .unwrap()
+            .expect("TrackRecorder not running")
             .save(save_request)
             .await?;
         Ok(())
@@ -438,7 +455,7 @@ impl Core {
                         let matcher_server = MatcherServer::from_arc(matcher_service.clone());
                         match Server::builder()
                             .add_service(matcher_server)
-                            .serve(address.parse().unwrap())
+                            .serve(address.parse().expect("Invalid address"))
                             .await
                         {
                             Ok(_) => {}
