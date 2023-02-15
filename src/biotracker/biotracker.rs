@@ -341,11 +341,31 @@ impl Core {
         let image = image.clone();
         let detector = self.state.feature_detector.clone().unwrap();
         let matcher = self.state.matcher.clone().unwrap();
-        let last_entities = self.state.experiment.last_entities.clone();
+        let last_entities = self
+            .state
+            .experiment
+            .last_entities
+            .as_ref()
+            .expect("last_entities is None");
+
+        let mut tracking_entities = Entities::default();
+        for id in &self.state.experiment.entity_ids {
+            if let Some(entity) = last_entities.entities.iter().find(|e| e.id == *id) {
+                tracking_entities.entities.push(entity.clone());
+            } else {
+                tracking_entities.entities.push(Entity {
+                    id: *id,
+                    feature: None,
+                    frame_number: 0,
+                });
+            }
+        }
+
         let arena = self.state.experiment.arena.clone();
         let tracking_tx = tracking_tx.clone();
         *tracking_task = Some(tokio::spawn(async move {
-            let result = Core::tracking_task(image, detector, matcher, arena, last_entities).await;
+            let result =
+                Core::tracking_task(image, detector, matcher, arena, tracking_entities).await;
             tracking_tx.send(result).await.unwrap();
         }));
     }
@@ -355,7 +375,7 @@ impl Core {
         mut detector: FeatureDetectorClient<tonic::transport::Channel>,
         mut matcher: MatcherClient<tonic::transport::Channel>,
         arena: Option<Arena>,
-        last_entities: Option<Entities>,
+        last_entities: Entities,
     ) -> Result<(u32, Features, Entities)> {
         let frame_number = image.frame_number;
         let detector_request = DetectorRequest {
@@ -368,7 +388,7 @@ impl Core {
             .into_inner();
         let matcher_request = MatcherRequest {
             features: Some(features.clone()),
-            last_entities,
+            last_entities: Some(last_entities),
             frame_number,
         };
         let entities = matcher.match_features(matcher_request).await?.into_inner();

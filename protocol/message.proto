@@ -44,8 +44,9 @@ message Experiment {
     RecordingState recording_state = 8;
     bool realtime_mode = 12;
     optional Image last_image = 9;
-    Features last_features = 11;
-    Entities last_entities = 10;
+    optional Features last_features = 11;
+    optional Entities last_entities = 10;
+    repeated uint32 entity_ids = 13;
 }
 
 service BioTracker {

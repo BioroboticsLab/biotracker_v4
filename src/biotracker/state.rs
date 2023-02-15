@@ -76,17 +76,8 @@ impl State {
     }
 
     pub fn add_entity(&mut self) -> Result<()> {
-        self.experiment
-            .last_entities
-            .as_mut()
-            .expect("no entities found")
-            .entities
-            .push(Entity {
-                id: self.entity_counter,
-                frame_number: 0,
-                feature: None,
-            });
         self.entity_counter += 1;
+        self.experiment.entity_ids.push(self.entity_counter);
         Ok(())
     }
 
@@ -118,12 +109,7 @@ impl State {
     }
 
     pub fn remove_entity(&mut self) -> Result<()> {
-        self.experiment
-            .last_entities
-            .as_mut()
-            .expect("no entities found")
-            .entities
-            .pop();
+        self.experiment.entity_ids.pop();
         Ok(())
     }
 
