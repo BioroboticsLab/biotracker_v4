@@ -23,13 +23,12 @@ impl SharedBuffer {
         self.shmem.get_os_id()
     }
 
-    pub unsafe fn as_slice(&self) -> &[u8] {
-        self.shmem.as_slice()
+    pub fn len(&self) -> usize {
+        self.shmem.len()
     }
 
-    pub unsafe fn as_slice_mut(&mut self) -> &mut [u8] {
-        assert!(self.shmem.is_owner());
-        self.shmem.as_slice_mut()
+    pub fn as_ptr(&self) -> *mut u8 {
+        self.shmem.as_ptr()
     }
 }
 
@@ -42,10 +41,17 @@ impl DoubleBuffer {
         Self { data: [].into() }
     }
 
-    pub fn push(&mut self, buffer: SharedBuffer) {
+    pub fn get(&mut self, len: usize) -> &mut SharedBuffer {
         if self.data.len() >= 2 {
-            self.data.pop_front();
+            let buffer = self.data.pop_front().unwrap();
+            if buffer.len() == len {
+                self.data.push_back(buffer);
+                return self.data.back_mut().unwrap();
+            }
         }
+
+        let buffer = SharedBuffer::new(len).unwrap();
         self.data.push_back(buffer);
+        return self.data.back_mut().unwrap();
     }
 }

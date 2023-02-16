@@ -35,10 +35,10 @@ class TrackRecorder(TrackRecorderBase):
         return Empty()
 
     def save_tracks(self, filename, tracks):
-        tracks, start_frame_number, skeleton = self.preprocess_tracks(tracks)
+        tracks, start_frame_number = self.preprocess_tracks(tracks)
         path = filename + '.hdf5'
         with robofish.io.File(path, mode='w', world_size_cm=self.world_size_cm, frequency_hz=self.hz) as f:
-            for id, track in tracks.items():
+            for id, (track, skeleton) in tracks.items():
                 (poses,outlines) = self.track_to_poses(track, start_frame_number, skeleton)
                 f.create_entity(category='organism', name=f'fish_{id}', poses=poses)
 
@@ -52,8 +52,8 @@ class TrackRecorder(TrackRecorderBase):
             skeleton = track.skeleton
             track = sorted(track.observations.items(), key=lambda x: x[0])
             min_frame_number = min(min_frame_number, track[0][0])
-            processed[id] = track
-        return (processed, min_frame_number, skeleton)
+            processed[id] = (track, skeleton)
+        return (processed, min_frame_number)
 
     def track_to_poses(self, track, start_frame_number, skeleton):
         poses = []

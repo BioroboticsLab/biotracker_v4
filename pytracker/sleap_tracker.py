@@ -18,7 +18,7 @@ class SLEAPTracker(FeatureDetectorBase):
             raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, repr(e))
         buf = shared_img.as_numpy()
         resized = cv2.resize(buf, (self.target_width, self.target_height))
-        grayscale = cv2.cvtColor(resized, cv2.COLOR_RGBA2GRAY)
+        grayscale = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
         prediction = self.predictor.inference_model.predict(np_array)
         features = Features(skeleton=self.skeleton)

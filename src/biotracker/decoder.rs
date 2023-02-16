@@ -1,6 +1,6 @@
 use super::{
     protocol::{Image, VideoInfo},
-    DoubleBuffer, SharedBuffer,
+    DoubleBuffer,
 };
 use anyhow::Result;
 use cv::prelude::*;
@@ -29,7 +29,7 @@ struct PylonCamera<'a> {
 }
 
 trait VideoSampler {
-    fn get_image(&mut self, frame_number: u32) -> Result<(SharedBuffer, Image)>;
+    fn get_image(&mut self, mat: &mut Mat) -> Result<()>;
     fn seek(&mut self, _target_framenumber: u32) -> Result<()> {
         Err(anyhow::anyhow!("Seek not supported"))
     }
@@ -51,6 +51,9 @@ impl Playback {
         let width = video_capture.get(cv::videoio::CAP_PROP_FRAME_WIDTH)? as u32;
         let height = video_capture.get(cv::videoio::CAP_PROP_FRAME_HEIGHT)? as u32;
         let fps = video_capture.get(cv::videoio::CAP_PROP_FPS)?;
+        if width == 0 || height == 0 {
+            return Err(anyhow::anyhow!("Invalid video size"));
+        }
 
         Ok((
             Playback {
@@ -145,27 +148,9 @@ impl VideoSampler for PylonCamera<'_> {
 }
 
 impl VideoSampler for VideoCapture {
-    fn get_image(&mut self, frame_number: u32) -> Result<(SharedBuffer, Image)> {
-        let mut img = Mat::default();
-        self.read(&mut img)?;
-        let mut img_rgba = Mat::default();
-        cv::imgproc::cvt_color(&img, &mut img_rgba, cv::imgproc::COLOR_BGR2RGBA, 0)?;
-        let data = img_rgba.data_bytes()?;
-        let height = img_rgba.rows() as u32;
-        let width = img_rgba.cols() as u32;
-        let mut image_buffer = SharedBuffer::new(data.len())?;
-        unsafe {
-            image_buffer.as_slice_mut().clone_from_slice(data);
-        }
-        let shm_id = image_buffer.id().to_owned();
-        let image = Image {
-            stream_id: "Tracking".to_owned(),
-            frame_number,
-            shm_id,
-            width,
-            height,
-        };
-        Ok((image_buffer, image))
+    fn get_image(&mut self, mat: &mut Mat) -> Result<()> {
+        self.read(mat)?;
+        Ok(())
     }
 
     fn seek(&mut self, target_framenumber: u32) -> Result<()> {
@@ -186,8 +171,25 @@ impl VideoDecoder {
 
     pub fn get_image(&mut self) -> Result<Image> {
         let frame_number = self.playback.frame_number;
-        let (image_buffer, image) = self.playback.sampler.get_image(frame_number)?;
-        self.buffer_manager.push(image_buffer);
+        let buffer_len = (self.info.width * self.info.height * 3) as usize;
+        let buffer = self.buffer_manager.get(buffer_len);
+        unsafe {
+            let data_ptr = buffer.as_ptr();
+            let mut mat = Mat::new_size_with_data(
+                cv::core::Size::new(self.info.width as i32, self.info.height as i32),
+                cv::core::CV_8UC3,
+                data_ptr as *mut std::ffi::c_void,
+                cv::core::Mat_AUTO_STEP,
+            )?;
+            self.playback.sampler.get_image(&mut mat)?;
+        }
+        let image = Image {
+            stream_id: "Tracking".to_owned(),
+            frame_number,
+            shm_id: buffer.id().to_owned(),
+            width: self.info.width,
+            height: self.info.height,
+        };
         self.playback.frame_number += 1;
         Ok(image)
     }

@@ -7,6 +7,7 @@ use crate::biotracker::{
     protocol::{Feature, Image, SkeletonDescriptor},
     SharedBuffer,
 };
+use cv::prelude::*;
 use egui_wgpu::wgpu;
 
 pub struct AnnotatedVideo {
@@ -80,17 +81,34 @@ impl AnnotatedVideo {
             self.texture = Some(texture);
         }
 
+        let rgba_data = vec![0; (image.width * image.height * 4) as usize];
         unsafe {
-            self.texture
-                .as_mut()
-                .expect("Texture not initialized")
-                .update(
-                    &onscreen_render_state.queue,
-                    image.width,
-                    image.height,
-                    image_buffer.as_slice(),
-                )
+            let bgr_mat = Mat::new_size_with_data(
+                cv::core::Size::new(image.width as i32, image.height as i32),
+                cv::core::CV_8UC3,
+                image_buffer.as_ptr() as *mut std::ffi::c_void,
+                cv::core::Mat_AUTO_STEP,
+            )
+            .unwrap();
+            let mut rgba_mat = Mat::new_size_with_data(
+                cv::core::Size::new(image.width as i32, image.height as i32),
+                cv::core::CV_8UC4,
+                rgba_data.as_ptr() as *mut std::ffi::c_void,
+                cv::core::Mat_AUTO_STEP,
+            )
+            .unwrap();
+            cv::imgproc::cvt_color(&bgr_mat, &mut rgba_mat, cv::imgproc::COLOR_BGR2RGBA, 0)
+                .unwrap();
         }
+        self.texture
+            .as_mut()
+            .expect("Texture not initialized")
+            .update(
+                &onscreen_render_state.queue,
+                image.width,
+                image.height,
+                rgba_data.as_slice(),
+            )
     }
 
     pub fn show_settings(&mut self, ui: &mut egui::Ui) {

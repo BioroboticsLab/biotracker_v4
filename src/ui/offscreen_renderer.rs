@@ -1,7 +1,8 @@
 use super::texture::Texture;
-use crate::biotracker::{protocol::*, DoubleBuffer, SharedBuffer};
+use crate::biotracker::{protocol::*, DoubleBuffer};
 use anyhow::Result;
 use core::num::NonZeroU32;
+use cv::prelude::*;
 use egui::mutex::RwLock;
 use egui_wgpu::wgpu;
 use std::sync::Arc;
@@ -11,8 +12,8 @@ pub struct OffscreenRenderer {
     pub texture: Texture,
     context: egui::Context,
     copy_buffer: Option<wgpu::Buffer>,
-    copy_buffer_row_padding: Option<u32>,
     image_history: DoubleBuffer,
+    bytes_per_row: NonZeroU32,
 }
 
 impl OffscreenRenderer {
@@ -38,6 +39,11 @@ impl OffscreenRenderer {
             1,
         )));
 
+        let mut bytes_per_row = width * 4;
+        if bytes_per_row % 256 != 0 {
+            bytes_per_row += 256 - (bytes_per_row % 256);
+        }
+
         Self {
             context: egui::Context::default(),
             render_state: egui_wgpu::RenderState {
@@ -48,7 +54,7 @@ impl OffscreenRenderer {
             },
             texture,
             copy_buffer: None,
-            copy_buffer_row_padding: None,
+            bytes_per_row: NonZeroU32::new(bytes_per_row).unwrap(),
             image_history: DoubleBuffer::new(),
         }
     }
@@ -116,17 +122,9 @@ impl OffscreenRenderer {
         }
 
         let rows = self.texture.size.height;
-        let mut bytes_per_row = self.texture.size.width * 4;
-        if bytes_per_row % 256 != 0 {
-            let row_padding = 256 - (bytes_per_row % 256);
-            self.copy_buffer_row_padding = Some(row_padding);
-            bytes_per_row += row_padding;
-        } else {
-            self.copy_buffer_row_padding = None;
-        }
         let copy_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("egui_copy_buffer"),
-            size: (rows * bytes_per_row) as u64,
+            size: (rows * self.bytes_per_row.get()) as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
@@ -137,7 +135,7 @@ impl OffscreenRenderer {
                 buffer: &copy_buffer,
                 layout: wgpu::ImageDataLayout {
                     offset: 0,
-                    bytes_per_row: Some(NonZeroU32::new(bytes_per_row).unwrap()),
+                    bytes_per_row: Some(self.bytes_per_row),
                     rows_per_image: None,
                 },
             },
@@ -154,45 +152,44 @@ impl OffscreenRenderer {
 
     pub fn texture_to_image(&mut self, frame_number: u32) -> Result<Image> {
         if let Some(copy_buffer) = self.copy_buffer.take() {
-            let mut shared_buffer = SharedBuffer::new(
-                (self.texture.size.width * self.texture.size.height * 4) as usize,
-            )?;
-            let buffer_slice = copy_buffer.slice(..);
+            let (width, height) = (self.texture.size.width, self.texture.size.height);
+            let bgr_buffer_len = (width * height * 3) as usize;
+            let bgr_buffer = self.image_history.get(bgr_buffer_len);
+            let rgba_buffer_slice = copy_buffer.slice(..);
             let (tx, rx) = std::sync::mpsc::channel();
-            buffer_slice.map_async(wgpu::MapMode::Read, move |r| {
+            rgba_buffer_slice.map_async(wgpu::MapMode::Read, move |r| {
                 tx.send(r).unwrap();
             });
             self.render_state.device.poll(wgpu::Maintain::Wait);
             rx.recv().unwrap().unwrap();
+            let rgba_buffer_view = rgba_buffer_slice.get_mapped_range();
 
-            let buffer_view = buffer_slice.get_mapped_range();
             unsafe {
-                if let Some(row_padding) = self.copy_buffer_row_padding.take() {
-                    let dest = bytemuck::cast_slice_mut::<u8, u32>(shared_buffer.as_slice_mut());
-                    let src = bytemuck::cast_slice::<u8, u32>(&(*buffer_view));
-                    let (width, height) = (self.texture.size.width, self.texture.size.height);
-                    let channels = std::mem::size_of::<u32>() as u32;
-                    for row in 0..height {
-                        for col in 0..width {
-                            let src_idx = row * (width + row_padding / channels) + col;
-                            let dest_idx = row * width + col;
-                            dest[dest_idx as usize] = src[src_idx as usize];
-                        }
-                    }
-                } else {
-                    shared_buffer
-                        .as_slice_mut()
-                        .copy_from_slice(&(*buffer_view));
-                }
+                let rgba_mat = Mat::new_size_with_data(
+                    cv::core::Size::new(
+                        self.texture.size.width as i32,
+                        self.texture.size.height as i32,
+                    ),
+                    cv::core::CV_8UC4,
+                    rgba_buffer_view.as_ptr() as *mut _,
+                    self.bytes_per_row.get() as usize,
+                )?;
+                let mut bgr_mat = Mat::new_size_with_data(
+                    cv::core::Size::new(width as i32, height as i32),
+                    cv::core::CV_8UC3,
+                    bgr_buffer.as_ptr() as *mut std::ffi::c_void,
+                    cv::core::Mat_AUTO_STEP,
+                )?;
+                cv::imgproc::cvt_color(&rgba_mat, &mut bgr_mat, cv::imgproc::COLOR_RGBA2BGR, 0)
+                    .unwrap();
             }
             let image = Image {
                 stream_id: "Annotated".to_string(),
-                shm_id: shared_buffer.id().to_owned(),
+                shm_id: bgr_buffer.id().to_owned(),
                 width: self.texture.size.width,
                 height: self.texture.size.height,
                 frame_number,
             };
-            self.image_history.push(shared_buffer);
             self.copy_buffer = None;
             return Ok(image);
         }

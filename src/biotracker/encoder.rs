@@ -33,34 +33,30 @@ impl VideoEncoder {
     }
 
     pub fn add_image(&mut self, image: Image) -> Result<()> {
-        let image_buffer = SharedBuffer::open(&image.shm_id)?;
-        let cv_image = unsafe {
-            let data = image_buffer.as_slice();
-            let cv_image = Mat::new_nd_with_data(
-                &[image.width as i32, image.height as i32],
-                cv::core::CV_8UC4,
-                data.as_ptr() as *mut std::ffi::c_void,
-                None,
+        let buffer = SharedBuffer::open(&image.shm_id)?;
+        unsafe {
+            let data_ptr = buffer.as_ptr();
+            let mat = Mat::new_size_with_data(
+                cv::core::Size::new(image.width as i32, image.height as i32),
+                cv::core::CV_8UC3,
+                data_ptr as *mut std::ffi::c_void,
+                cv::core::Mat_AUTO_STEP,
             )?;
-            cv_image
-        };
-        let cv_image = if image.width != self.config.width || image.height != self.config.height {
-            let mut resized = Mat::default();
-            cv::imgproc::resize(
-                &cv_image,
-                &mut resized,
-                cv::core::Size::new(self.config.width as i32, self.config.height as i32),
-                0.0,
-                0.0,
-                cv::imgproc::InterpolationFlags::INTER_LINEAR as i32,
-            )?;
-            resized
-        } else {
-            cv_image
-        };
-        let mut image_bgr = Mat::default();
-        cv::imgproc::cvt_color(&cv_image, &mut image_bgr, cv::imgproc::COLOR_RGBA2BGR, 0)?;
-        self.video_writer.write(&image_bgr)?;
+            if image.width == self.config.width || image.height == self.config.height {
+                self.video_writer.write(&mat)?;
+            } else {
+                let mut resized_mat = Mat::default();
+                cv::imgproc::resize(
+                    &mat,
+                    &mut resized_mat,
+                    cv::core::Size::new(self.config.width as i32, self.config.height as i32),
+                    0.0,
+                    0.0,
+                    cv::imgproc::INTER_LINEAR,
+                )?;
+                self.video_writer.write(&resized_mat)?;
+            }
+        }
         Ok(())
     }
 }
