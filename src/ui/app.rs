@@ -93,16 +93,23 @@ impl BioTrackerUI {
         })
     }
 
-    fn filemenu(&mut self) -> Result<()> {
+    fn filemenu(&mut self) {
         if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
             let path_str = pathbuf
                 .to_str()
-                .ok_or(anyhow!("Failed to get string from pathbuf"))?;
-            self.context
+                .ok_or(anyhow!("Failed to get string from pathbuf"))
+                .unwrap();
+            match self
+                .context
                 .bt
-                .command(Command::OpenVideo(path_str.to_owned()))?;
+                .command(Command::OpenVideo(path_str.to_owned()))
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Failed to open video: {}", e);
+                }
+            }
         }
-        Ok(())
     }
 
     fn update_image(&mut self, frame: &mut eframe::Frame) {
@@ -195,7 +202,7 @@ impl eframe::App for BioTrackerUI {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open Media").clicked() {
-                        self.filemenu().unwrap();
+                        self.filemenu();
                         ui.close_menu();
                     }
                     if ui.button("Quit").clicked() {
@@ -254,7 +261,7 @@ impl eframe::App for BioTrackerUI {
                     }
                 } else {
                     if ui.add(egui::Button::new("▶")).clicked() {
-                        self.filemenu().unwrap();
+                        self.filemenu();
                     }
                 }
             });

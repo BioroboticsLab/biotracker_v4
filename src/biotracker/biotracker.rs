@@ -131,11 +131,21 @@ impl Core {
         }
 
         if let Some(video) = &self.args.video {
-            self.state.open_video(video.to_owned())?;
+            match self.state.open_video(video.to_owned()) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Failed to open video: {}", e);
+                }
+            }
         }
 
         if let Some(seek) = &self.args.seek {
-            self.state.seek(*seek)?;
+            match self.state.seek(seek.to_owned()) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Failed to seek: {}", e);
+                }
+            }
         }
 
         if let Some(count) = &self.args.entity_count {
