@@ -15,6 +15,7 @@ pub struct AnnotatedVideo {
     draw_features: bool,
     draw_entities: bool,
     draw_node_labels: bool,
+    draw_ids: bool,
     scale: f32,
     texture: Option<Texture>,
     onscreen_id: egui::TextureId,
@@ -28,6 +29,7 @@ impl AnnotatedVideo {
             draw_features: false,
             draw_entities: true,
             draw_node_labels: false,
+            draw_ids: true,
             scale: 1.0,
             texture: None,
             onscreen_id: egui::epaint::TextureId::default(),
@@ -115,6 +117,7 @@ impl AnnotatedVideo {
         ui.checkbox(&mut self.draw_features, "Draw unmatched entity features");
         ui.checkbox(&mut self.draw_entities, "Draw matched entities");
         ui.checkbox(&mut self.draw_node_labels, "Draw node labels");
+        ui.checkbox(&mut self.draw_ids, "Draw ID label");
     }
 
     pub fn show_onscreen(&self, ui: &mut egui::Ui, ctx: &BioTrackerUIContext) {
@@ -127,6 +130,7 @@ impl AnnotatedVideo {
 
     fn paint_feature(
         &self,
+        id: Option<u32>,
         painter: &egui::Painter,
         to_screen: &egui::emath::RectTransform,
         feature: &Feature,
@@ -151,11 +155,20 @@ impl AnnotatedVideo {
                 painter.line_segment([from, to], egui::Stroke::new(2.0 * scale, color));
             }
         }
+
+        let mut center_point = egui::pos2(0.0, 0.0);
+        let mut n_nodes = 0;
         for node in nodes {
             let point = to_screen * egui::pos2(node.x, node.y);
             if point.any_nan() {
                 continue;
             }
+            center_point += egui::Vec2 {
+                x: point.x,
+                y: point.y,
+            };
+            n_nodes += 1;
+
             painter.circle(
                 point,
                 1.5 * scale,
@@ -163,6 +176,24 @@ impl AnnotatedVideo {
                 egui::Stroke::new(1.0, egui::Color32::BLACK),
             )
         }
+
+        if let Some(id) = id {
+            if n_nodes > 0 && self.draw_ids {
+                center_point.x /= n_nodes as f32;
+                center_point.y /= n_nodes as f32;
+                painter.text(
+                    center_point,
+                    egui::Align2::CENTER_TOP,
+                    id.to_string(),
+                    egui::FontId {
+                        size: 9.0 * scale,
+                        family: egui::FontFamily::Proportional,
+                    },
+                    egui::Color32::WHITE,
+                );
+            }
+        }
+
         if self.draw_node_labels {
             if let Some(skeleton) = skeleton {
                 for i in 0..nodes.len() {
@@ -222,6 +253,7 @@ impl AnnotatedVideo {
             if self.draw_features {
                 for feature in &features.features {
                     self.paint_feature(
+                        None,
                         &painter,
                         &to_screen,
                         feature,
@@ -238,7 +270,15 @@ impl AnnotatedVideo {
                 for entity in &entities.entities {
                     if let Some(feature) = &entity.feature {
                         let color = self.color_palette.pick(entity.id);
-                        self.paint_feature(&painter, &to_screen, feature, &skeleton, color, scale);
+                        self.paint_feature(
+                            Some(entity.id),
+                            &painter,
+                            &to_screen,
+                            feature,
+                            &skeleton,
+                            color,
+                            scale,
+                        );
                     }
                 }
             }

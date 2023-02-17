@@ -215,6 +215,17 @@ impl eframe::App for BioTrackerUI {
             });
         });
 
+        // Top Toolbar
+        egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                let switch_icon = "🔄";
+                if ui.button(switch_icon).clicked() {
+                    self.filemenu();
+                    ui.close_menu();
+                }
+            });
+        });
+
         // Video controls
         egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
             ui.horizontal(|ui| {

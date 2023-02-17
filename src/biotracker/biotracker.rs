@@ -177,7 +177,6 @@ impl Core {
         self.init().await?;
         let fps = self.state.experiment.target_fps;
         let mut fps_interval = tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps));
-        fps_interval.tick().await;
 
         let mut decoder_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut tracking_task: Option<tokio::task::JoinHandle<()>> = None;
