@@ -233,7 +233,9 @@ impl Core {
                         Ok(image) => {
                             self.state.experiment.last_image = Some(image.clone());
                             if tracking_task.is_none() {
+                                let switch_request = self.state.switch_request.take();
                                 self.start_tracking_task(
+                                    switch_request,
                                     &mut tracking_task,
                                     &tracking_tx,
                                     &image);
@@ -259,7 +261,9 @@ impl Core {
                             self.state.handle_tracking_result(frame_number, features, entities);
                             if let Some(image) =  &self.state.experiment.last_image {
                                 if image.frame_number != frame_number {
+                                    let switch_request = self.state.switch_request.take();
                                     self.start_tracking_task(
+                                        switch_request,
                                         &mut tracking_task,
                                         &tracking_tx,
                                         &image);
@@ -308,6 +312,9 @@ impl Core {
             Command::RemoveEntity(_) => {
                 self.state.remove_entity()?;
             }
+            Command::SwitchEntities(switch_request) => {
+                self.state.switch_entities(switch_request)?;
+            }
             Command::Shutdown(_) => {}
         }
         Ok(Empty {})
@@ -355,6 +362,7 @@ impl Core {
 
     fn start_tracking_task(
         &self,
+        entity_switch_request: Option<EntityIdSwitch>,
         tracking_task: &mut Option<tokio::task::JoinHandle<()>>,
         tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features, Entities)>>,
         image: &Image,
@@ -383,6 +391,23 @@ impl Core {
                     feature: None,
                     frame_number: 0,
                 });
+            }
+        }
+
+        if let Some(switch_request) = entity_switch_request {
+            let (mut first_idx, mut second_idx) = (None, None);
+            for (idx, entity) in tracking_entities.entities.iter().enumerate() {
+                if entity.id == switch_request.id1 {
+                    first_idx = Some(idx);
+                }
+                if entity.id == switch_request.id2 {
+                    second_idx = Some(idx);
+                }
+            }
+
+            if let (Some(first_idx), Some(second_idx)) = (first_idx, second_idx) {
+                tracking_entities.entities[first_idx].id = switch_request.id2;
+                tracking_entities.entities[second_idx].id = switch_request.id1;
             }
         }
 

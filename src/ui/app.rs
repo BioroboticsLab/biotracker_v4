@@ -1,6 +1,10 @@
 use super::{
-    annotated_video::AnnotatedVideo, controller::BioTrackerController,
-    offscreen_renderer::OffscreenRenderer, side_panel::SidePanel,
+    annotated_video::AnnotatedVideo,
+    color::{Palette, ALPHABET},
+    controller::BioTrackerController,
+    entity_switcher::EntitySwitcher,
+    offscreen_renderer::OffscreenRenderer,
+    side_panel::SidePanel,
 };
 use crate::biotracker::{protocol::*, CommandLineArguments};
 use anyhow::{anyhow, Result};
@@ -26,12 +30,15 @@ pub struct BioTrackerUIContext {
     pub current_image: Option<Image>,
     pub current_entities: Option<Entities>,
     pub current_features: Option<Features>,
+    pub color_palette: Palette,
+    pub entity_switcher_open: bool,
 }
 
 pub struct BioTrackerUIComponents {
     pub side_panel: SidePanel,
     pub offscreen_renderer: OffscreenRenderer,
     pub video_view: AnnotatedVideo,
+    pub entity_switcher: EntitySwitcher,
 }
 
 pub struct BioTrackerUI {
@@ -83,11 +90,14 @@ impl BioTrackerUI {
                 current_image: None,
                 current_entities: None,
                 current_features: None,
+                color_palette: Palette { colors: &ALPHABET },
+                entity_switcher_open: false,
             },
             components: BioTrackerUIComponents {
                 offscreen_renderer,
                 side_panel: SidePanel::new(),
                 video_view: AnnotatedVideo::new(),
+                entity_switcher: EntitySwitcher::new(),
             },
             core_thread: Some(core_thread),
         })
@@ -219,10 +229,7 @@ impl eframe::App for BioTrackerUI {
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 let switch_icon = "🔄";
-                if ui.button(switch_icon).clicked() {
-                    self.filemenu();
-                    ui.close_menu();
-                }
+                ui.toggle_value(&mut self.context.entity_switcher_open, switch_icon);
             });
         });
 
@@ -290,6 +297,7 @@ impl eframe::App for BioTrackerUI {
                 .max_height(f32::INFINITY)
                 .show(ui, |ui| {
                     self.components.video_view.show_onscreen(ui, &self.context);
+                    self.components.entity_switcher.show(ctx, &mut self.context);
                 });
         });
 

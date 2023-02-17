@@ -1,8 +1,4 @@
-use super::{
-    app::BioTrackerUIContext,
-    color::{Palette, ALPHABET},
-    texture::Texture,
-};
+use super::{app::BioTrackerUIContext, texture::Texture};
 use crate::biotracker::{
     protocol::{Feature, Image, SkeletonDescriptor},
     SharedBuffer,
@@ -11,7 +7,6 @@ use cv::prelude::*;
 use egui_wgpu::wgpu;
 
 pub struct AnnotatedVideo {
-    color_palette: Palette,
     draw_features: bool,
     draw_entities: bool,
     draw_node_labels: bool,
@@ -25,7 +20,6 @@ pub struct AnnotatedVideo {
 impl AnnotatedVideo {
     pub fn new() -> Self {
         Self {
-            color_palette: Palette { colors: &ALPHABET },
             draw_features: false,
             draw_entities: true,
             draw_node_labels: false,
@@ -269,7 +263,7 @@ impl AnnotatedVideo {
             if self.draw_entities {
                 for entity in &entities.entities {
                     if let Some(feature) = &entity.feature {
-                        let color = self.color_palette.pick(entity.id);
+                        let color = ctx.color_palette.pick(entity.id);
                         self.paint_feature(
                             Some(entity.id),
                             &painter,

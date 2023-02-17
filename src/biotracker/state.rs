@@ -13,6 +13,7 @@ pub struct State {
     pub tracks: HashMap<u32, Track>,
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
+    pub switch_request: Option<EntityIdSwitch>,
     entity_counter: u32,
 }
 
@@ -78,6 +79,14 @@ impl State {
     pub fn add_entity(&mut self) -> Result<()> {
         self.entity_counter += 1;
         self.experiment.entity_ids.push(self.entity_counter);
+        Ok(())
+    }
+
+    pub fn switch_entities(&mut self, request: EntityIdSwitch) -> Result<()> {
+        if self.switch_request.is_some() {
+            return Err(anyhow::anyhow!("Entity switch pending"));
+        }
+        self.switch_request = Some(request);
         Ok(())
     }
 
