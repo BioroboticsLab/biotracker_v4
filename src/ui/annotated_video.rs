@@ -1,4 +1,4 @@
-use super::{app::BioTrackerUIContext, texture::Texture};
+use super::{annotator::Annotator, app::BioTrackerUIContext, texture::Texture};
 use crate::biotracker::{
     protocol::{Feature, Image, SkeletonDescriptor},
     SharedBuffer,
@@ -15,6 +15,7 @@ pub struct AnnotatedVideo {
     texture: Option<Texture>,
     onscreen_id: egui::TextureId,
     offscreen_id: egui::TextureId,
+    annotator: Annotator,
 }
 
 impl AnnotatedVideo {
@@ -28,6 +29,7 @@ impl AnnotatedVideo {
             texture: None,
             onscreen_id: egui::epaint::TextureId::default(),
             offscreen_id: egui::epaint::TextureId::default(),
+            annotator: Annotator::default(),
         }
     }
 
@@ -114,11 +116,11 @@ impl AnnotatedVideo {
         ui.checkbox(&mut self.draw_ids, "Draw ID label");
     }
 
-    pub fn show_onscreen(&self, ui: &mut egui::Ui, ctx: &BioTrackerUIContext) {
+    pub fn show_onscreen(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         self.show(ui, self.onscreen_id, Some(self.scale), ctx);
     }
 
-    pub fn show_offscreen(&self, ui: &mut egui::Ui, ctx: &BioTrackerUIContext) {
+    pub fn show_offscreen(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         self.show(ui, self.offscreen_id, None, ctx);
     }
 
@@ -209,11 +211,11 @@ impl AnnotatedVideo {
     }
 
     fn show(
-        &self,
+        &mut self,
         ui: &mut egui::Ui,
         texture_id: egui::epaint::TextureId,
         scale: Option<f32>,
-        ctx: &BioTrackerUIContext,
+        ctx: &mut BioTrackerUIContext,
     ) {
         let texture = match &self.texture {
             Some(texture) => texture,
@@ -225,7 +227,10 @@ impl AnnotatedVideo {
                 let aspect_ratio = texture.size.height as f32 / texture.size.width as f32;
                 let width = ui.available_width() * scale;
                 let height = width * aspect_ratio;
-                ui.allocate_painter(egui::Vec2::new(width, height), egui::Sense::hover())
+                ui.allocate_painter(
+                    egui::Vec2::new(width, height),
+                    egui::Sense::click_and_drag(),
+                )
             }
             None => ui.allocate_painter(
                 egui::Vec2::new(texture.size.width as f32, texture.size.height as f32),
@@ -277,5 +282,7 @@ impl AnnotatedVideo {
                 }
             }
         }
+
+        self.annotator.show(&response, &painter, ctx);
     }
 }

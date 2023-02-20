@@ -1,5 +1,6 @@
 use super::{
     annotated_video::AnnotatedVideo,
+    annotator::Annotator,
     color::{Palette, ALPHABET},
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
@@ -32,6 +33,8 @@ pub struct BioTrackerUIContext {
     pub current_features: Option<Features>,
     pub color_palette: Palette,
     pub entity_switcher_open: bool,
+    pub annotator_open: bool,
+    pub experiment_setup_open: bool,
 }
 
 pub struct BioTrackerUIComponents {
@@ -39,6 +42,7 @@ pub struct BioTrackerUIComponents {
     pub offscreen_renderer: OffscreenRenderer,
     pub video_view: AnnotatedVideo,
     pub entity_switcher: EntitySwitcher,
+    pub annotator: Annotator,
 }
 
 pub struct BioTrackerUI {
@@ -92,12 +96,15 @@ impl BioTrackerUI {
                 current_features: None,
                 color_palette: Palette { colors: &ALPHABET },
                 entity_switcher_open: false,
+                annotator_open: false,
+                experiment_setup_open: true,
             },
             components: BioTrackerUIComponents {
                 offscreen_renderer,
                 side_panel: SidePanel::new(),
                 video_view: AnnotatedVideo::new(),
-                entity_switcher: EntitySwitcher::new(),
+                entity_switcher: EntitySwitcher::default(),
+                annotator: Annotator::default(),
             },
             core_thread: Some(core_thread),
         })
@@ -228,8 +235,10 @@ impl eframe::App for BioTrackerUI {
         // Top Toolbar
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                let switch_icon = "🔄";
+                let switch_icon = "🔀";
                 ui.toggle_value(&mut self.context.entity_switcher_open, switch_icon);
+                let annotator_icon = "📝";
+                ui.toggle_value(&mut self.context.annotator_open, annotator_icon);
             });
         });
 
@@ -296,7 +305,9 @@ impl eframe::App for BioTrackerUI {
                 .max_width(f32::INFINITY)
                 .max_height(f32::INFINITY)
                 .show(ui, |ui| {
-                    self.components.video_view.show_onscreen(ui, &self.context);
+                    self.components
+                        .video_view
+                        .show_onscreen(ui, &mut self.context);
                     self.components.entity_switcher.show(ctx, &mut self.context);
                 });
         });
@@ -304,7 +315,9 @@ impl eframe::App for BioTrackerUI {
         if self.context.render_offscreen {
             self.components.offscreen_renderer.render(|ctx| {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    self.components.video_view.show_offscreen(ui, &self.context);
+                    self.components
+                        .video_view
+                        .show_offscreen(ui, &mut self.context);
                 });
             });
         }

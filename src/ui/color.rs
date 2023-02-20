@@ -10,6 +10,12 @@ impl Palette {
     }
 }
 
+impl Default for Palette {
+    fn default() -> Self {
+        Self { colors: &ALPHABET }
+    }
+}
+
 // alphabet
 // 26 visually distinct colors
 // Source: "A Colour Alphabet and the Limits of Colour Coding", Paul Green-Armytage
