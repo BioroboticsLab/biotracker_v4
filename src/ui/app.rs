@@ -5,7 +5,7 @@ use super::{
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
     offscreen_renderer::OffscreenRenderer,
-    side_panel::SidePanel,
+    window_menu::WindowMenu,
 };
 use crate::biotracker::{protocol::*, CommandLineArguments};
 use anyhow::{anyhow, Result};
@@ -38,7 +38,7 @@ pub struct BioTrackerUIContext {
 }
 
 pub struct BioTrackerUIComponents {
-    pub side_panel: SidePanel,
+    pub window_menu: WindowMenu,
     pub offscreen_renderer: OffscreenRenderer,
     pub video_view: AnnotatedVideo,
     pub entity_switcher: EntitySwitcher,
@@ -101,32 +101,13 @@ impl BioTrackerUI {
             },
             components: BioTrackerUIComponents {
                 offscreen_renderer,
-                side_panel: SidePanel::new(),
+                window_menu: WindowMenu::new(),
                 video_view: AnnotatedVideo::new(),
                 entity_switcher: EntitySwitcher::default(),
                 annotator: Annotator::default(),
             },
             core_thread: Some(core_thread),
         })
-    }
-
-    fn filemenu(&mut self) {
-        if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
-            let path_str = pathbuf
-                .to_str()
-                .ok_or(anyhow!("Failed to get string from pathbuf"))
-                .unwrap();
-            match self
-                .context
-                .bt
-                .command(Command::OpenVideo(path_str.to_owned()))
-            {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Failed to open video: {}", e);
-                }
-            }
-        }
     }
 
     fn update_image(&mut self, frame: &mut eframe::Frame) {
@@ -215,22 +196,12 @@ impl eframe::App for BioTrackerUI {
         self.handle_shortcuts(ctx).unwrap();
 
         // Window menu
-        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
-                ui.menu_button("File", |ui| {
-                    if ui.button("Open Media").clicked() {
-                        self.filemenu();
-                        ui.close_menu();
-                    }
-                    if ui.button("Quit").clicked() {
-                        frame.close();
-                    }
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    egui::warn_if_debug_build(ui);
-                });
-            });
-        });
+        self.components.window_menu.show(
+            ctx,
+            &mut self.context,
+            frame,
+            &mut self.components.video_view,
+        );
 
         // Top Toolbar
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
@@ -288,16 +259,11 @@ impl eframe::App for BioTrackerUI {
                     }
                 } else {
                     if ui.add(egui::Button::new("▶")).clicked() {
-                        self.filemenu();
+                        self.components.window_menu.filemenu(&mut self.context);
                     }
                 }
             });
         });
-
-        // Side panel
-        self.components
-            .side_panel
-            .show(ctx, &mut self.context, &mut self.components.video_view);
 
         // Video view
         egui::CentralPanel::default().show(ctx, |ui| {
