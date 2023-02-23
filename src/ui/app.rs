@@ -8,7 +8,7 @@ use super::{
     window_menu::WindowMenu,
 };
 use crate::biotracker::{protocol::*, CommandLineArguments};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::thread::JoinHandle;

@@ -86,13 +86,15 @@ impl Playback {
             pylon_cxx::TlFactory::instance(pylon_unchecked_ref).create_first_device()?
         };
         camera.open()?;
-        //camera.enum_node("PixelFormat")?.set_value("RGB8")?;
+        camera
+            .node_map()
+            .enum_node("PixelFormat")?
+            .set_value("Mono8")?;
         camera.start_grabbing(&pylon_cxx::GrabOptions::default())?;
         let frame_number = 0;
         let frame_count = 0;
-        // FIXME: get from node_map
-        let width = 2048;
-        let height = 2048;
+        let width = camera.node_map().integer_node("Width")?.value()? as u32;
+        let height = camera.node_map().integer_node("Height")?.value()? as u32;
         let fps = 25.0;
         let pylon_camera = Box::new(PylonCamera {
             _pylon_raii: pylon,
@@ -117,7 +119,7 @@ impl Playback {
 
 #[cfg(feature = "pylon")]
 impl VideoSampler for PylonCamera<'_> {
-    fn get_image(&mut self, frame_number: u32) -> Result<(SharedBuffer, Image)> {
+    fn get_image(&mut self, mat: &mut Mat) -> Result<()> {
         self.camera.retrieve_result(
             2000,
             &mut self.grab_result,
@@ -128,19 +130,18 @@ impl VideoSampler for PylonCamera<'_> {
             let pylon_buffer = self.grab_result.buffer()?;
             let width = self.grab_result.width()?;
             let height = self.grab_result.height()?;
-            let mut shared_buffer = SharedBuffer::new(pylon_buffer.len())?;
             unsafe {
-                shared_buffer.as_slice_mut().clone_from_slice(pylon_buffer);
+                let data_ptr = pylon_buffer.as_ptr();
+                let src_mat = Mat::new_size_with_data(
+                    cv::core::Size::new(width as i32, height as i32),
+                    cv::core::CV_8UC1,
+                    data_ptr as *mut std::ffi::c_void,
+                    cv::core::Mat_AUTO_STEP,
+                )?;
+                assert!(mat.size()? == src_mat.size()?);
+                cv::imgproc::cvt_color(&src_mat, mat, cv::imgproc::COLOR_GRAY2BGR, 0)?;
             }
-            let shm_id = shared_buffer.id().to_owned();
-            let image = Image {
-                stream_id: "Tracking".to_owned(),
-                frame_number,
-                shm_id,
-                width,
-                height,
-            };
-            Ok((shared_buffer, image))
+            Ok(())
         } else {
             Err(anyhow::anyhow!("PylonCamera: Failed to grab image"))
         }
