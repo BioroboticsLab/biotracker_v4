@@ -7,7 +7,10 @@ use super::{
     offscreen_renderer::OffscreenRenderer,
     settings::{filemenu, settings_window, video_open_buttons},
 };
-use crate::biotracker::{protocol::*, CommandLineArguments};
+use crate::{
+    biotracker::{protocol::*, CommandLineArguments},
+    util::framenumber_to_hhmmss,
+};
 use anyhow::Result;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -231,25 +234,22 @@ impl eframe::App for BioTrackerUI {
 
                     let available_size = ui.available_size_before_wrap();
                     let label_size = ui.available_size() / 8.0;
-                    let slider_size = available_size - (label_size);
+                    let slider_size = 0.95 * available_size - (label_size * 2.0);
 
-                    ui.label(&self.context.current_frame_number.to_string());
+                    let current_frame = &mut self.context.current_frame_number;
+                    ui.label(framenumber_to_hhmmss(*current_frame, video_info.fps));
                     ui.spacing_mut().slider_width = slider_size.x;
                     if frame_count > 0 {
                         let response = ui.add(
-                            egui::Slider::new(
-                                &mut self.context.current_frame_number,
-                                0..=frame_count,
-                            )
-                            .show_value(false),
+                            egui::Slider::new(current_frame, 0..=frame_count).show_value(false),
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
                             self.context
                                 .bt
-                                .command(Command::Seek(self.context.current_frame_number))
+                                .command(Command::Seek(*current_frame))
                                 .unwrap();
                         }
-                        ui.label(&frame_count.to_string());
+                        ui.label(framenumber_to_hhmmss(frame_count, video_info.fps));
                     }
                 } else {
                     if ui.add(egui::Button::new("▶")).clicked() {
