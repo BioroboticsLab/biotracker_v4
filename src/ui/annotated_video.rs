@@ -7,10 +7,10 @@ use cv::prelude::*;
 use egui_wgpu::wgpu;
 
 pub struct AnnotatedVideo {
-    draw_features: bool,
-    draw_entities: bool,
-    draw_node_labels: bool,
-    draw_ids: bool,
+    pub draw_features: bool,
+    pub draw_entities: bool,
+    pub draw_node_labels: bool,
+    pub draw_ids: bool,
     scale: f32,
     texture: Option<Texture>,
     onscreen_id: egui::TextureId,
@@ -107,13 +107,6 @@ impl AnnotatedVideo {
                 image.height,
                 rgba_data.as_slice(),
             )
-    }
-
-    pub fn show_settings(&mut self, ui: &mut egui::Ui) {
-        ui.checkbox(&mut self.draw_features, "Draw unmatched entity features");
-        ui.checkbox(&mut self.draw_entities, "Draw matched entities");
-        ui.checkbox(&mut self.draw_node_labels, "Draw node labels");
-        ui.checkbox(&mut self.draw_ids, "Draw ID label");
     }
 
     pub fn show_onscreen(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {

@@ -5,7 +5,7 @@ use super::{
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
     offscreen_renderer::OffscreenRenderer,
-    window_menu::WindowMenu,
+    settings::{filemenu, settings_window, video_open_buttons},
 };
 use crate::biotracker::{protocol::*, CommandLineArguments};
 use anyhow::Result;
@@ -27,7 +27,6 @@ pub struct BioTrackerUIContext {
     pub render_offscreen: bool,
     pub image_streams: HashSet<String>,
     pub view_image: String,
-    pub record_image: String,
     pub current_image: Option<Image>,
     pub current_entities: Option<Entities>,
     pub current_features: Option<Features>,
@@ -35,10 +34,10 @@ pub struct BioTrackerUIContext {
     pub entity_switcher_open: bool,
     pub annotator_open: bool,
     pub experiment_setup_open: bool,
+    pub default_video_encoder_config: VideoEncoderConfig,
 }
 
 pub struct BioTrackerUIComponents {
-    pub window_menu: WindowMenu,
     pub offscreen_renderer: OffscreenRenderer,
     pub video_view: AnnotatedVideo,
     pub entity_switcher: EntitySwitcher,
@@ -90,7 +89,6 @@ impl BioTrackerUI {
                 render_offscreen: false,
                 image_streams: HashSet::new(),
                 view_image: "Tracking".to_string(),
-                record_image: "Tracking".to_string(),
                 current_image: None,
                 current_entities: None,
                 current_features: None,
@@ -98,10 +96,10 @@ impl BioTrackerUI {
                 entity_switcher_open: false,
                 annotator_open: false,
                 experiment_setup_open: true,
+                default_video_encoder_config: VideoEncoderConfig::default(),
             },
             components: BioTrackerUIComponents {
                 offscreen_renderer,
-                window_menu: WindowMenu::new(),
                 video_view: AnnotatedVideo::new(),
                 entity_switcher: EntitySwitcher::default(),
                 annotator: Annotator::default(),
@@ -195,21 +193,20 @@ impl eframe::App for BioTrackerUI {
         self.update_context(frame);
         self.handle_shortcuts(ctx).unwrap();
 
-        // Window menu
-        self.components.window_menu.show(
-            ctx,
-            &mut self.context,
-            frame,
-            &mut self.components.video_view,
-        );
-
         // Top Toolbar
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
+                let settings_icon = "⛭";
+                ui.toggle_value(&mut self.context.experiment_setup_open, settings_icon)
+                    .on_hover_text("Open Settings");
+                video_open_buttons(ui, &mut self.context);
+                ui.separator();
                 let switch_icon = "🔀";
-                ui.toggle_value(&mut self.context.entity_switcher_open, switch_icon);
+                ui.toggle_value(&mut self.context.entity_switcher_open, switch_icon)
+                    .on_hover_text("Switch entity IDs");
                 let annotator_icon = "📝";
-                ui.toggle_value(&mut self.context.annotator_open, annotator_icon);
+                ui.toggle_value(&mut self.context.annotator_open, annotator_icon)
+                    .on_hover_text("Annotation tool");
             });
         });
 
@@ -259,7 +256,7 @@ impl eframe::App for BioTrackerUI {
                     }
                 } else {
                     if ui.add(egui::Button::new("▶")).clicked() {
-                        self.components.window_menu.filemenu(&mut self.context);
+                        filemenu(&mut self.context);
                     }
                 }
             });
@@ -267,6 +264,7 @@ impl eframe::App for BioTrackerUI {
 
         // Video view
         egui::CentralPanel::default().show(ctx, |ui| {
+            settings_window(ui, &mut self.context, &mut self.components);
             egui::ScrollArea::both()
                 .max_width(f32::INFINITY)
                 .max_height(f32::INFINITY)

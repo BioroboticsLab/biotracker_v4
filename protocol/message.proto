@@ -32,8 +32,8 @@ message BioTrackerCommand {
         bool realtime_mode = 9;
         uint32 seek = 3;
         string open_video = 4;
-        string add_entity = 5;
-        string remove_entity = 6;
+        Empty add_entity = 5;
+        uint32 remove_entity = 6;
         VideoEncoderConfig video_encoder_config = 7;
         EntityIDSwitch switch_entities = 10;
         Empty shutdown = 8;
