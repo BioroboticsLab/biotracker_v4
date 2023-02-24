@@ -17,39 +17,6 @@ pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUICompo
     ui.end_row();
 }
 
-pub fn recording_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
-    let (mut width, mut height) = if let Some(video_info) = ctx.experiment.video_info.as_ref() {
-        (video_info.width, video_info.height)
-    } else {
-        (0, 0)
-    };
-    let path = &mut ctx.default_video_encoder_config.video_path;
-    ui.label("Filename for captured Video");
-    ui.add(egui::TextEdit::singleline(path).hint_text("Filename for video capture."));
-    ui.end_row();
-    ui.add(egui::Label::new("Width"));
-    ui.add(egui::DragValue::new(&mut width));
-    ui.end_row();
-    ui.add(egui::Label::new("Height"));
-    ui.add(egui::DragValue::new(&mut height));
-    ui.end_row();
-    ui.label("Recorded image");
-    let record_image = &mut ctx.default_video_encoder_config.image_stream_id;
-    egui::ComboBox::from_id_source("image_streams")
-        .selected_text(record_image.clone())
-        .show_ui(ui, |ui| {
-            for image in ctx.image_streams.iter().chain([&"Annotated".to_owned()]) {
-                if ui
-                    .selectable_label(*image == *record_image, image)
-                    .clicked()
-                {
-                    *record_image = image.clone();
-                }
-            }
-        });
-    ui.end_row();
-}
-
 pub fn video_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     if ui.button("🎬").on_hover_text("Open video").clicked() {
         filemenu(ctx);
@@ -167,11 +134,6 @@ pub fn settings_window(
                 ui.separator();
                 ui.end_row();
                 video_settings(ui, ctx);
-
-                ui.heading("Recording");
-                ui.separator();
-                ui.end_row();
-                recording_settings(ui, ctx);
 
                 ui.heading("Annotations");
                 ui.separator();

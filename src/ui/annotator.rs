@@ -91,7 +91,9 @@ impl AnnotationBuilder {
     fn arrow(&mut self, response: &egui::Response, painter: &egui::Painter) -> bool {
         if response.hovered() {
             self.shape = Some(Shape::Arrow(Arrow {
-                center: painter.ctx().input().pointer.hover_pos().unwrap(),
+                center: painter
+                    .ctx()
+                    .input(|input| input.pointer.hover_pos().unwrap()),
                 scale: 10.0,
             }));
         }

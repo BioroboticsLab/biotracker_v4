@@ -6,9 +6,9 @@ edition = "2021"
 
 [dependencies]
 # egui
-egui = { git = "https://github.com/emilk/egui", rev="0eabd894bd0e4466d53e3098e8cce1f10183f3b0" }
-egui-wgpu = { git = "https://github.com/emilk/egui", rev="0eabd894bd0e4466d53e3098e8cce1f10183f3b0" }
-eframe= { git = "https://github.com/emilk/egui", rev="0eabd894bd0e4466d53e3098e8cce1f10183f3b0", features=["wgpu"], default-features = false }
+egui = "0.21.0"
+egui-wgpu = "0.21.0"
+eframe= { version="0.21.3", features=["wgpu"], default-features = false }
 rfd = "0.10"
 
 # message protocol
@@ -27,6 +27,7 @@ rand = "0.8"
 cv = { package= "opencv", version="0.75", default-features = false, features = ["imgproc", "videoio"] }
 pylon-cxx = { version = "0.3.4", optional = true }
 bytemuck = "1.13.0"
+chrono = "0.4.23"
 
 [build-dependencies]
 tonic-build = "0.8.4"

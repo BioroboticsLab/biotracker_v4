@@ -1,3 +1,5 @@
+use chrono::{Datelike, Timelike};
+
 pub struct ScopedTimer {
     name: String,
     start: std::time::Instant,
@@ -25,4 +27,17 @@ pub fn framenumber_to_hhmmss(framenumber: u32, fps: f64) -> String {
     let minutes = (duration.as_secs() / 60) % 60;
     let hours = (duration.as_secs() / 60) / 60;
     format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+}
+
+pub fn generate_project_basename() -> String {
+    let now = chrono::Local::now();
+    format!(
+        "{}-{:02}-{:02}-{:02}-{:02}-{:02}",
+        now.year(),
+        now.month(),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    )
 }

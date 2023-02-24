@@ -5,6 +5,7 @@ use super::{
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
     offscreen_renderer::OffscreenRenderer,
+    record_button::RecordButton,
     settings::{filemenu, settings_window, video_open_buttons},
 };
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     util::framenumber_to_hhmmss,
 };
 use anyhow::Result;
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
@@ -27,8 +27,6 @@ pub struct BioTrackerUIContext {
     pub persistent_state: PersistentState,
     pub current_frame_number: u32,
     pub render_offscreen: bool,
-    pub image_streams: HashSet<String>,
-    pub view_image: String,
     pub current_image: Option<Image>,
     pub current_entities: Option<Entities>,
     pub current_features: Option<Features>,
@@ -36,7 +34,6 @@ pub struct BioTrackerUIContext {
     pub entity_switcher_open: bool,
     pub annotator_open: bool,
     pub experiment_setup_open: bool,
-    pub default_video_encoder_config: VideoEncoderConfig,
 }
 
 pub struct BioTrackerUIComponents {
@@ -44,6 +41,7 @@ pub struct BioTrackerUIComponents {
     pub video_view: AnnotatedVideo,
     pub entity_switcher: EntitySwitcher,
     pub annotator: Annotator,
+    pub record_button: RecordButton,
 }
 
 pub struct BioTrackerUI {
@@ -88,22 +86,20 @@ impl BioTrackerUI {
                 persistent_state,
                 current_frame_number: 0,
                 render_offscreen: false,
-                image_streams: HashSet::new(),
-                view_image: "Tracking".to_string(),
                 current_image: None,
                 current_entities: None,
                 current_features: None,
                 color_palette: Palette { colors: &ALPHABET },
                 entity_switcher_open: false,
                 annotator_open: false,
-                experiment_setup_open: true,
-                default_video_encoder_config: VideoEncoderConfig::default(),
+                experiment_setup_open: false,
             },
             components: BioTrackerUIComponents {
                 offscreen_renderer,
                 video_view: AnnotatedVideo::new(),
                 entity_switcher: EntitySwitcher::default(),
                 annotator: Annotator::default(),
+                record_button: RecordButton::default(),
             },
             core_thread: Some(core_thread),
         })
@@ -152,19 +148,19 @@ impl BioTrackerUI {
     }
 
     fn handle_shortcuts(&mut self, ctx: &egui::Context) -> Result<()> {
-        if ctx.input().key_pressed(egui::Key::ArrowRight) {
+        if ctx.input(|input| input.key_pressed(egui::Key::ArrowRight)) {
             self.context
                 .bt
                 .command(Command::Seek(self.context.current_frame_number + 1))?;
         }
-        if ctx.input().key_pressed(egui::Key::ArrowLeft) {
+        if ctx.input(|input| input.key_pressed(egui::Key::ArrowLeft)) {
             if self.context.current_frame_number > 0 {
                 self.context
                     .bt
                     .command(Command::Seek(self.context.current_frame_number - 1))?;
             }
         }
-        if ctx.input().key_pressed(egui::Key::Space) {
+        if ctx.input(|input| input.key_pressed(egui::Key::Space)) {
             match PlaybackState::from_i32(self.context.experiment.playback_state).unwrap() {
                 PlaybackState::Playing => {
                     self.context
@@ -187,16 +183,13 @@ impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.components
             .video_view
-            .update_scale(ctx.input().zoom_delta());
+            .update_scale(ctx.input(|input| input.zoom_delta()));
         self.update_context(frame);
         self.handle_shortcuts(ctx).unwrap();
 
         // Top Toolbar
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                let settings_icon = "⛭";
-                ui.toggle_value(&mut self.context.experiment_setup_open, settings_icon)
-                    .on_hover_text("Open Settings");
                 video_open_buttons(ui, &mut self.context);
                 ui.separator();
                 let switch_icon = "🔀";
@@ -205,14 +198,18 @@ impl eframe::App for BioTrackerUI {
                 let annotator_icon = "📝";
                 ui.toggle_value(&mut self.context.annotator_open, annotator_icon)
                     .on_hover_text("Annotation tool");
+                let settings_icon = "⛭";
+                ui.toggle_value(&mut self.context.experiment_setup_open, settings_icon)
+                    .on_hover_text("Open Settings");
             });
         });
 
         // Video controls
         egui::TopBottomPanel::bottom("video_control").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if let Some(video_info) = &self.context.experiment.video_info {
+                if let Some(video_info) = self.context.experiment.video_info.clone() {
                     let frame_count = video_info.frame_count;
+                    self.components.record_button.show(ui, &mut self.context);
                     match PlaybackState::from_i32(self.context.experiment.playback_state).unwrap() {
                         PlaybackState::Playing => {
                             if ui.add(egui::Button::new("⏸")).clicked() {
