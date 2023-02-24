@@ -23,7 +23,6 @@ pub struct BioTrackerUIContext {
     pub experiment: Experiment,
     pub persistent_state: PersistentState,
     pub current_frame_number: u32,
-    pub seek_target: u32,
     pub render_offscreen: bool,
     pub image_streams: HashSet<String>,
     pub view_image: String,
@@ -85,7 +84,6 @@ impl BioTrackerUI {
                 experiment: Experiment::default(),
                 persistent_state,
                 current_frame_number: 0,
-                seek_target: 0,
                 render_offscreen: false,
                 image_streams: HashSet::new(),
                 view_image: "Tracking".to_string(),
@@ -177,9 +175,6 @@ impl BioTrackerUI {
                 }
                 _ => {}
             }
-            self.context
-                .bt
-                .command(Command::Seek(self.context.current_frame_number - 1))?;
         }
         Ok(())
     }
@@ -242,16 +237,18 @@ impl eframe::App for BioTrackerUI {
                     ui.spacing_mut().slider_width = slider_size.x;
                     if frame_count > 0 {
                         let response = ui.add(
-                            egui::Slider::new(&mut self.context.seek_target, 0..=frame_count)
-                                .show_value(false),
+                            egui::Slider::new(
+                                &mut self.context.current_frame_number,
+                                0..=frame_count,
+                            )
+                            .show_value(false),
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
                             self.context
                                 .bt
-                                .command(Command::Seek(self.context.seek_target))
+                                .command(Command::Seek(self.context.current_frame_number))
                                 .unwrap();
                         }
-
                         ui.label(&frame_count.to_string());
                     }
                 } else {
