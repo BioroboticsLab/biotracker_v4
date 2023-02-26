@@ -32,6 +32,7 @@ message BioTrackerCommand {
         bool realtime_mode = 9;
         uint32 seek = 3;
         string open_video = 4;
+        string open_track = 11;
         Empty add_entity = 5;
         uint32 remove_entity = 6;
         VideoEncoderConfig video_encoder_config = 7;
@@ -89,9 +90,17 @@ message TrackSaveRequest {
     string save_path = 3;
 }
 
+message TrackLoadRequest {
+    string load_path = 3;
+}
+
+message Tracks {
+    map<uint32, Track> tracks = 12;
+}
+
 service TrackRecorder {
     rpc set_config(ComponentConfiguration) returns (Empty) {}
-    rpc load(Empty) returns (Track);
+    rpc load(TrackLoadRequest) returns (Tracks);
     rpc save(TrackSaveRequest) returns (Empty);
 }
 

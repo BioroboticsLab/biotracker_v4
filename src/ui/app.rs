@@ -6,7 +6,7 @@ use super::{
     entity_switcher::EntitySwitcher,
     offscreen_renderer::OffscreenRenderer,
     record_button::RecordButton,
-    settings::{filemenu, settings_window, video_open_buttons},
+    settings::{file_open_buttons, open_video, settings_window},
 };
 use crate::{
     biotracker::{protocol::*, CommandLineArguments},
@@ -190,7 +190,8 @@ impl eframe::App for BioTrackerUI {
         // Top Toolbar
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
-                video_open_buttons(ui, &mut self.context);
+                file_open_buttons(ui, &mut self.context);
+
                 ui.separator();
                 let switch_icon = "🔀";
                 ui.toggle_value(&mut self.context.entity_switcher_open, switch_icon)
@@ -250,7 +251,7 @@ impl eframe::App for BioTrackerUI {
                     }
                 } else {
                     if ui.add(egui::Button::new("▶")).clicked() {
-                        filemenu(&mut self.context);
+                        open_video(&mut self.context);
                     }
                 }
             });

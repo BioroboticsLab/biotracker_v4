@@ -303,6 +303,9 @@ impl Core {
             Command::OpenVideo(path) => {
                 self.state.open_video(path)?;
             }
+            Command::OpenTrack(path) => {
+                self.open_track(path).await?;
+            }
             Command::VideoEncoderConfig(config) => {
                 self.state.initialize_video_encoder(config)?;
             }
@@ -459,6 +462,18 @@ impl Core {
                 }));
             }
         }
+    }
+
+    async fn open_track(&mut self, path: String) -> Result<()> {
+        let tracks_response = self
+            .state
+            .track_recorder
+            .as_mut()
+            .expect("track recorder not running")
+            .load(TrackLoadRequest { load_path: path })
+            .await?;
+        self.state.tracks = tracks_response.into_inner().tracks;
+        Ok(())
     }
 
     async fn finish_recording(&mut self) -> Result<()> {

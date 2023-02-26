@@ -17,12 +17,15 @@ pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUICompo
     ui.end_row();
 }
 
-pub fn video_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
+pub fn file_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     if ui.button("🎬").on_hover_text("Open video").clicked() {
-        filemenu(ctx);
+        open_video(ctx);
     }
     if ui.button("📹").on_hover_text("Open camera").clicked() {
         eprintln!("Feature not implemented!")
+    }
+    if ui.button("🖭").on_hover_text("Load Track").clicked() {
+        open_track(ctx);
     }
 }
 
@@ -36,7 +39,7 @@ pub fn video_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         .hint_text("Select video source.")
         .show(ui);
     ui.horizontal(|ui| {
-        video_open_buttons(ui, ctx);
+        file_open_buttons(ui, ctx);
     });
     ui.end_row();
 
@@ -144,13 +147,28 @@ pub fn settings_window(
     ctx.experiment_setup_open = open;
 }
 
-pub fn filemenu(ctx: &mut BioTrackerUIContext) {
-    if let Some(pathbuf) = rfd::FileDialog::new().pick_file() {
-        let path_str = pathbuf
-            .to_str()
-            .ok_or(anyhow::anyhow!("Failed to get string from pathbuf"))
-            .unwrap();
-        match ctx.bt.command(Command::OpenVideo(path_str.to_owned())) {
+pub fn filemenu() -> Option<String> {
+    match rfd::FileDialog::new().pick_file() {
+        Some(pathbuf) => Some(
+            pathbuf
+                .to_str()
+                .ok_or(anyhow::anyhow!("Failed to get string from pathbuf"))
+                .unwrap()
+                .to_owned(),
+        ),
+        None => None,
+    }
+}
+
+pub fn open_track(ctx: &mut BioTrackerUIContext) {
+    if let Some(path) = filemenu() {
+        ctx.bt.command(Command::OpenTrack(path)).unwrap();
+    }
+}
+
+pub fn open_video(ctx: &mut BioTrackerUIContext) {
+    if let Some(path) = filemenu() {
+        match ctx.bt.command(Command::OpenVideo(path.to_owned())) {
             Ok(_) => {}
             Err(e) => {
                 eprintln!("Failed to open video: {}", e);
