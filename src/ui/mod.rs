@@ -6,6 +6,7 @@ pub mod color;
 pub mod controller;
 pub mod entity_dropdown;
 pub mod entity_switcher;
+pub mod metrics;
 pub mod offscreen_renderer;
 pub mod record_button;
 pub mod settings;

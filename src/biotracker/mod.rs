@@ -5,6 +5,7 @@ pub mod config;
 pub mod decoder;
 pub mod encoder;
 pub mod matcher;
+pub mod metric;
 pub mod protocol;
 pub mod python_process;
 pub mod robofish_commander;

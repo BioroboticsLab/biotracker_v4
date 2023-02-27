@@ -5,6 +5,7 @@ use super::{
     color::{Palette, ALPHABET},
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
+    metrics::MetricsPlot,
     offscreen_renderer::OffscreenRenderer,
     record_button::RecordButton,
     settings::{file_open_buttons, open_video, settings_window},
@@ -44,6 +45,7 @@ pub struct BioTrackerUIComponents {
     pub annotator: Annotator,
     pub record_button: RecordButton,
     pub camera_button: CameraButton,
+    pub metrics_plot: MetricsPlot,
 }
 
 pub struct BioTrackerUI {
@@ -103,6 +105,7 @@ impl BioTrackerUI {
                 annotator: Annotator::default(),
                 record_button: RecordButton::default(),
                 camera_button: CameraButton::new(),
+                metrics_plot: MetricsPlot::new(),
             },
             core_thread: Some(core_thread),
         })
@@ -203,6 +206,7 @@ impl eframe::App for BioTrackerUI {
                 let annotator_icon = "📝";
                 ui.toggle_value(&mut self.context.annotator_open, annotator_icon)
                     .on_hover_text("Annotation tool");
+                self.components.metrics_plot.show_button(ui);
                 let settings_icon = "⛭";
                 ui.toggle_value(&mut self.context.experiment_setup_open, settings_icon)
                     .on_hover_text("Open Settings");
@@ -261,9 +265,9 @@ impl eframe::App for BioTrackerUI {
             });
         });
 
-        // Video view
         egui::CentralPanel::default().show(ctx, |ui| {
             settings_window(ui, &mut self.context, &mut self.components);
+            // Video view
             egui::ScrollArea::both()
                 .max_width(f32::INFINITY)
                 .max_height(f32::INFINITY)
@@ -273,6 +277,10 @@ impl eframe::App for BioTrackerUI {
                         .show_onscreen(ui, &mut self.context);
                     self.components.entity_switcher.show(ctx, &mut self.context);
                 });
+            // Metrics view
+            if self.components.metrics_plot.open {
+                self.components.metrics_plot.show(ui, &mut self.context);
+            }
         });
 
         if self.context.render_offscreen {

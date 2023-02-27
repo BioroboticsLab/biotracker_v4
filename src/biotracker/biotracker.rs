@@ -218,6 +218,12 @@ impl Core {
                         (self.state.experiment.realtime_mode || tracking_task.is_none()) {
                         if decoder_task.is_some() {
                             eprintln!("VideoDecoder too slow, dropping frame");
+                            self.state
+                                .experiment
+                                .tracking_metrics
+                                .as_mut()
+                                .unwrap()
+                                .playback_dropped_frames += 1;
                         } else {
                             self.start_decoder_task(&mut decoder_task, &decoder_tx);
                         }
@@ -231,7 +237,7 @@ impl Core {
                     decoder_task = None;
                     match image_result {
                         Ok(image) => {
-                            self.state.experiment.last_image = Some(image.clone());
+                            self.state.handle_image_result(image.clone());
                             if tracking_task.is_none() {
                                 let switch_request = self.state.switch_request.take();
                                 self.start_tracking_task(
@@ -340,6 +346,12 @@ impl Core {
 
         if let Some(task) = &encoder_task {
             if !task.is_finished() {
+                self.state
+                    .experiment
+                    .tracking_metrics
+                    .as_mut()
+                    .unwrap()
+                    .encoder_dropped_frames += 1;
                 eprintln!(
                     "VideoEncoder too slow, dropping frame {}",
                     image.frame_number

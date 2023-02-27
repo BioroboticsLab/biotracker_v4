@@ -41,6 +41,15 @@ message BioTrackerCommand {
     }
 }
 
+message TrackingMetrics {
+    uint32 tracking_dropped_frames = 1;
+    uint32 encoder_dropped_frames = 2;
+    uint32 playback_dropped_frames = 9;
+    uint32 detected_features = 8;
+    float playback_frame_time = 3;
+    float tracking_frame_time = 4;
+}
+
 message Experiment {
     string base_directory = 1;
     double target_fps = 3;
@@ -50,6 +59,7 @@ message Experiment {
     PlaybackState playback_state = 7;
     RecordingState recording_state = 8;
     bool realtime_mode = 12;
+    optional TrackingMetrics tracking_metrics = 14;
     optional Image last_image = 9;
     optional Features last_features = 11;
     optional Entities last_entities = 10;

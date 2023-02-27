@@ -1,3 +1,4 @@
+use super::metric::DurationMetric;
 use super::{protocol::*, BiotrackerConfig, VideoDecoder, VideoEncoder};
 use anyhow::Result;
 use std::collections::HashMap;
@@ -14,7 +15,14 @@ pub struct State {
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
+    pub metrics: Metrics,
     entity_counter: u32,
+}
+
+#[derive(Default)]
+pub struct Metrics {
+    pub tracking_frame_time: DurationMetric,
+    pub playback_frame_time: DurationMetric,
 }
 
 impl State {
@@ -27,11 +35,18 @@ impl State {
                 recording_state: RecordingState::Initial as i32,
                 realtime_mode: true,
                 last_entities: Some(Entities { entities: vec![] }),
+                tracking_metrics: Some(TrackingMetrics::default()),
                 ..Default::default()
             },
             config,
             ..Default::default()
         }
+    }
+
+    pub fn handle_image_result(&mut self, image: Image) {
+        let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
+        self.experiment.last_image = Some(image.clone());
+        tracking_metrics.playback_frame_time = self.metrics.playback_frame_time.update();
     }
 
     pub fn handle_tracking_result(
@@ -40,6 +55,9 @@ impl State {
         features: Features,
         entities: Entities,
     ) {
+        let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
+        tracking_metrics.tracking_frame_time = self.metrics.tracking_frame_time.update();
+        tracking_metrics.detected_features = features.features.len() as u32;
         let skeleton = features.skeleton.clone();
         for entity in &entities.entities {
             if !self.tracks.contains_key(&entity.id) {
