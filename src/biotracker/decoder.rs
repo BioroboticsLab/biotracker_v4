@@ -37,7 +37,7 @@ trait VideoSampler {
 
 impl Playback {
     fn open(uri: String) -> Result<(Playback, VideoInfo)> {
-        if uri == "pylon" {
+        if uri.starts_with("pylon:///") {
             Playback::open_basler(uri)
         } else {
             Playback::open_cv(uri)
@@ -81,10 +81,18 @@ impl Playback {
         // - pylon is pinned
         // - pylon_camera.pylon is never modified
         // - pylon_camera.pylon outlives pylon_camera.camera
-        let camera = unsafe {
+        let tlfactory = unsafe {
             let pylon_unchecked_ref = (&*pylon as *const pylon_cxx::Pylon).as_ref().unwrap();
-            pylon_cxx::TlFactory::instance(pylon_unchecked_ref).create_first_device()?
+            pylon_cxx::TlFactory::instance(pylon_unchecked_ref)
         };
+
+        let device_id = camera_id.strip_prefix("pylon:///").unwrap();
+        let devices = tlfactory.enumerate_devices()?;
+        let device_info = devices
+            .iter()
+            .find(|d| d.model_name().unwrap() == device_id)
+            .unwrap();
+        let camera = tlfactory.create_device(device_info)?;
         camera.open()?;
         camera
             .node_map()
@@ -120,13 +128,17 @@ impl Playback {
 #[cfg(feature = "pylon")]
 impl VideoSampler for PylonCamera<'_> {
     fn get_image(&mut self, mat: &mut Mat) -> Result<()> {
-        self.camera.retrieve_result(
-            2000,
-            &mut self.grab_result,
-            pylon_cxx::TimeoutHandling::ThrowException,
-        )?;
+        for _ in 0..10 {
+            self.camera.retrieve_result(
+                2000,
+                &mut self.grab_result,
+                pylon_cxx::TimeoutHandling::ThrowException,
+            )?;
 
-        if self.grab_result.grab_succeeded()? {
+            if !self.grab_result.grab_succeeded()? {
+                continue;
+            }
+
             let pylon_buffer = self.grab_result.buffer()?;
             let width = self.grab_result.width()?;
             let height = self.grab_result.height()?;
@@ -141,10 +153,9 @@ impl VideoSampler for PylonCamera<'_> {
                 assert!(mat.size()? == src_mat.size()?);
                 cv::imgproc::cvt_color(&src_mat, mat, cv::imgproc::COLOR_GRAY2BGR, 0)?;
             }
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!("PylonCamera: Failed to grab image"))
+            return Ok(());
         }
+        Err(anyhow::anyhow!("Failed to retrieve frame"))
     }
 }
 
