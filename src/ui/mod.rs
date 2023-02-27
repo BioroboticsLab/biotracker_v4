@@ -1,6 +1,7 @@
 pub mod annotated_video;
 pub mod annotator;
 pub mod app;
+pub mod camera_button;
 pub mod color;
 pub mod controller;
 pub mod entity_dropdown;

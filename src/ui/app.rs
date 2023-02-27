@@ -1,6 +1,7 @@
 use super::{
     annotated_video::AnnotatedVideo,
     annotator::Annotator,
+    camera_button::CameraButton,
     color::{Palette, ALPHABET},
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
@@ -42,6 +43,7 @@ pub struct BioTrackerUIComponents {
     pub entity_switcher: EntitySwitcher,
     pub annotator: Annotator,
     pub record_button: RecordButton,
+    pub camera_button: CameraButton,
 }
 
 pub struct BioTrackerUI {
@@ -100,6 +102,7 @@ impl BioTrackerUI {
                 entity_switcher: EntitySwitcher::default(),
                 annotator: Annotator::default(),
                 record_button: RecordButton::default(),
+                camera_button: CameraButton::new(),
             },
             core_thread: Some(core_thread),
         })
@@ -191,6 +194,7 @@ impl eframe::App for BioTrackerUI {
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 file_open_buttons(ui, &mut self.context);
+                self.components.camera_button.show(ui, &mut self.context);
 
                 ui.separator();
                 let switch_icon = "🔀";

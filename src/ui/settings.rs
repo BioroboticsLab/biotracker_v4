@@ -21,9 +21,6 @@ pub fn file_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     if ui.button("🎬").on_hover_text("Open video").clicked() {
         open_video(ctx);
     }
-    if ui.button("📹").on_hover_text("Open camera").clicked() {
-        eprintln!("Feature not implemented!")
-    }
     if ui.button("🖭").on_hover_text("Load Track").clicked() {
         open_track(ctx);
     }
