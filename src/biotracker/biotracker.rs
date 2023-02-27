@@ -324,16 +324,6 @@ impl Core {
     }
 
     fn start_encoder_task(&mut self, encoder_task: &mut Option<JoinHandle<()>>, image: &Image) {
-        if let Some(task) = &encoder_task {
-            if !task.is_finished() {
-                eprintln!(
-                    "VideoEncoder too slow, dropping frame {}",
-                    image.frame_number
-                );
-                return;
-            }
-        }
-
         if self.state.experiment.recording_state != RecordingState::Recording as i32 {
             return;
         }
@@ -346,6 +336,16 @@ impl Core {
             .expect("VideoEncoder Config not set");
         if encoder_config.image_stream_id != image.stream_id {
             return;
+        }
+
+        if let Some(task) = &encoder_task {
+            if !task.is_finished() {
+                eprintln!(
+                    "VideoEncoder too slow, dropping frame {}",
+                    image.frame_number
+                );
+                return;
+            }
         }
 
         let encoder = self

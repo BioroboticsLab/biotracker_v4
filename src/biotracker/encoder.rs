@@ -18,7 +18,7 @@ impl VideoEncoder {
             cv::videoio::VideoWriter::fourcc('m', 'p', '4', 'v')?,
             config.fps,
             cv::core::Size::new(config.width as i32, config.height as i32),
-            true, // is_color
+            false, // is_color
         )?;
         if !video_writer.is_opened()? {
             return Err(anyhow::anyhow!(
