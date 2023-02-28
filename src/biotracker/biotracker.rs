@@ -175,8 +175,9 @@ impl Core {
 
     pub async fn run(mut self) -> Result<()> {
         self.init().await?;
-        let fps = self.state.experiment.target_fps;
-        let mut fps_interval = tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps));
+        let mut fps = self.state.experiment.target_fps;
+        let mut fps_interval =
+            tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps as f64));
 
         let mut decoder_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut tracking_task: Option<tokio::task::JoinHandle<()>> = None;
@@ -185,6 +186,11 @@ impl Core {
         let (tracking_tx, mut tracking_rx) = channel(16);
 
         loop {
+            if fps != self.state.experiment.target_fps {
+                fps = self.state.experiment.target_fps;
+                fps_interval =
+                    tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps as f64));
+            }
             let image_timer = fps_interval.tick();
 
             tokio::select! {
@@ -323,6 +329,9 @@ impl Core {
             }
             Command::SwitchEntities(switch_request) => {
                 self.state.switch_entities(switch_request)?;
+            }
+            Command::TargetFps(fps) => {
+                self.state.experiment.target_fps = fps;
             }
             Command::Shutdown(_) => {}
         }

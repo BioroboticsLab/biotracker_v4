@@ -80,7 +80,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     let mut fps = ctx.experiment.target_fps;
     ui.add(egui::Label::new("Target FPS")).changed();
     if ui.add(egui::DragValue::new(&mut fps)).changed() {
-        eprintln!("Feature not implemented!");
+        ctx.bt.command(Command::TargetFps(fps as f32)).unwrap();
     }
 
     if ui

@@ -31,7 +31,7 @@ impl RobofishCommander {
         entities: &Entities,
         arena: &Option<Arena>,
         frame_number: u32,
-        fps: f64,
+        fps: f32,
     ) -> Result<()> {
         let mut drop_connections = vec![];
         for (addr, stream) in self.streams.iter_mut() {
@@ -43,7 +43,7 @@ impl RobofishCommander {
                 if let Some(feature) = &entity.feature {
                     if let Some(pose) = &feature.pose {
                         let orientation_deg = pose.orientation_rad * 180.0 / std::f32::consts::PI;
-                        let timestamp_ms = (frame_number as f64 / fps * 1000.0) as u64;
+                        let timestamp_ms = (frame_number as f64 / fps as f64 * 1000.0) as u64;
                         let fish = format!(
                             "{},{},{},{},{},20,20,{},F&",
                             entity.id,

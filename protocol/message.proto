@@ -30,6 +30,7 @@ message BioTrackerCommand {
         PlaybackState playback_state = 1;
         RecordingState recording_state = 2;
         bool realtime_mode = 9;
+        float target_fps = 12;
         uint32 seek = 3;
         string open_video = 4;
         string open_track = 11;
@@ -52,7 +53,7 @@ message TrackingMetrics {
 
 message Experiment {
     string base_directory = 1;
-    double target_fps = 3;
+    float target_fps = 3;
     VideoInfo video_info = 4;
     VideoEncoderConfig video_encoder_config = 5;
     Arena arena = 6;
