@@ -3,6 +3,7 @@ from biotracker import *
 import cv2
 import numpy as np
 import sleap
+import tensorflow as tf
 import json
 import math
 
@@ -20,11 +21,11 @@ class SLEAPTracker(FeatureDetectorBase):
         resized = cv2.resize(buf, (self.target_width, self.target_height))
         grayscale = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
-        prediction = self.predictor.inference_model.predict(np_array)
+        prediction = self.model(np_array)
         features = Features(skeleton=self.skeleton)
-        for peaks, vals, instance_score in zip(prediction['instance_peaks'][0],
-                                               prediction['instance_peak_vals'][0],
-                                               prediction['centroid_vals'][0]):
+        for peaks, vals, instance_score in zip(prediction['instance_peaks'].numpy()[0],
+                                               prediction['instance_peak_vals'].numpy()[0],
+                                               prediction['centroid_vals'].numpy()[0]):
             feature = Feature(score=instance_score)
             for peak, val in zip(peaks, vals):
                 scale_x = self.target_width / request.image.width
@@ -51,6 +52,9 @@ class SLEAPTracker(FeatureDetectorBase):
                                        config['model_config']['center_node'])
         # warmup inference
         self.predictor.inference_model.predict(np.zeros((1, self.target_width, self.target_height, 1), dtype = "uint8"))
+        model_path = '/tmp/biotracker4_exported_model'
+        self.predictor.inference_model.save(model_path)
+        self.model = tf.saved_model.load(model_path)
 
     async def initialize_skeleton(self, center_node, front_node):
         sleap_skeleton = self.predictor.centroid_config.data.labels.skeletons[0]
