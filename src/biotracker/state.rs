@@ -119,7 +119,7 @@ impl State {
             }
             Some(RecordingState::Finished) => {
                 self.video_encoder = None;
-                self.experiment.video_encoder_config = None;
+                self.experiment.recording_config = None;
             }
             _ => {
                 return Err(anyhow::anyhow!(
@@ -132,9 +132,9 @@ impl State {
         Ok(())
     }
 
-    pub fn initialize_video_encoder(&mut self, config: VideoEncoderConfig) -> Result<()> {
+    pub fn initialize_recording(&mut self, config: RecordingConfig) -> Result<()> {
         let encoder = VideoEncoder::new(config.clone())?;
-        self.experiment.video_encoder_config = Some(config);
+        self.experiment.recording_config = Some(config);
         self.video_encoder = Some(Arc::new(Mutex::new(encoder)));
         Ok(())
     }

@@ -1,8 +1,9 @@
 use super::app::BioTrackerUIContext;
-use crate::{biotracker::protocol::*, util::generate_project_basename};
+use crate::biotracker::protocol::*;
+use chrono::{Datelike, Timelike};
 
 pub struct RecordButton {
-    pub base_name: String,
+    pub name: String,
     pub record_image_id: String,
     pub record_video: bool,
     pub dialog_open: bool,
@@ -11,7 +12,7 @@ pub struct RecordButton {
 impl Default for RecordButton {
     fn default() -> Self {
         Self {
-            base_name: generate_project_basename(),
+            name: "".to_string(),
             record_image_id: "Tracking".to_owned(),
             record_video: true,
             dialog_open: false,
@@ -47,6 +48,7 @@ impl RecordButton {
         let recording_icon = egui::RichText::new("⏺").color(egui::Color32::GRAY);
         let response = ui.toggle_value(&mut self.dialog_open, recording_icon);
         if self.dialog_open {
+            let base_name = generate_project_basename();
             egui::Window::new("Configure Recording")
                 .fixed_pos(response.rect.center_top())
                 .pivot(egui::Align2::LEFT_BOTTOM)
@@ -73,19 +75,29 @@ impl RecordButton {
                             });
                         ui.end_row();
                         ui.label("Project name");
-                        egui::TextEdit::singleline(&mut self.base_name)
-                            .hint_text("Set base name for recorded files")
+                        egui::TextEdit::singleline(&mut self.name)
+                            .hint_text(base_name.clone())
                             .show(ui);
                         ui.end_row();
                         if ui.button("Start").clicked() {
                             if self.record_video {
+                                let base_path = if self.name.is_empty() {
+                                    base_name
+                                } else {
+                                    self.name.clone()
+                                };
+                                let image_stream_id = if self.record_video {
+                                    self.record_image_id.clone()
+                                } else {
+                                    "".to_owned()
+                                };
                                 ctx.bt
-                                    .command(Command::VideoEncoderConfig(VideoEncoderConfig {
-                                        video_path: format!("{}.mp4", self.base_name),
+                                    .command(Command::InitializeRecording(RecordingConfig {
+                                        base_path,
                                         fps: video_info.fps,
                                         width: video_info.width,
                                         height: video_info.height,
-                                        image_stream_id: self.record_image_id.clone(),
+                                        image_stream_id,
                                     }))
                                     .unwrap();
                             }
@@ -101,4 +113,17 @@ impl RecordButton {
                 });
         }
     }
+}
+
+fn generate_project_basename() -> String {
+    let now = chrono::Local::now();
+    format!(
+        "{}-{:02}-{:02}-{:02}-{:02}-{:02}",
+        now.year(),
+        now.month(),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second()
+    )
 }

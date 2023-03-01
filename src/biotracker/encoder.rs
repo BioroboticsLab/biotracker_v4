@@ -8,14 +8,14 @@ unsafe impl Sync for VideoEncoder {}
 
 pub struct VideoEncoder {
     video_writer: VideoWriter,
-    config: VideoEncoderConfig,
+    config: RecordingConfig,
     image_buffers: DoubleBuffer,
 }
 
 impl VideoEncoder {
-    pub fn new(config: VideoEncoderConfig) -> Result<Self> {
+    pub fn new(config: RecordingConfig) -> Result<Self> {
         let video_writer = VideoWriter::new(
-            &config.video_path,
+            &format!("{}.mp4", config.base_path),
             cv::videoio::VideoWriter::fourcc('m', 'p', '4', 'v')?,
             config.fps,
             cv::core::Size::new(config.width as i32, config.height as i32),

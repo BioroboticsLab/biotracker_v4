@@ -42,9 +42,9 @@ message BioTrackerCommand {
         uint32 seek = 3;
         string open_video = 4;
         string open_track = 11;
+        RecordingConfig initialize_recording = 7;
         Empty add_entity = 5;
         uint32 remove_entity = 6;
-        VideoEncoderConfig video_encoder_config = 7;
         EntityIDSwitch switch_entities = 10;
         Arena update_arena = 13;
         Empty shutdown = 8;
@@ -61,10 +61,9 @@ message TrackingMetrics {
 }
 
 message Experiment {
-    string base_directory = 1;
     float target_fps = 3;
     VideoInfo video_info = 4;
-    VideoEncoderConfig video_encoder_config = 5;
+    RecordingConfig recording_config = 5;
     Arena arena = 6;
     PlaybackState playback_state = 7;
     RecordingState recording_state = 8;
@@ -75,6 +74,14 @@ message Experiment {
     optional Entities last_entities = 10;
     repeated uint32 entity_ids = 13;
     optional Transform rectification = 15;
+}
+
+message RecordingConfig {
+  string base_path = 1;
+  double fps = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  string image_stream_id = 5;
 }
 
 service BioTracker {
@@ -108,7 +115,6 @@ service Matcher {
 message TrackSaveRequest {
     Experiment experiment = 1;
     map<uint32, Track> tracks = 12;
-    string save_path = 3;
 }
 
 message TrackLoadRequest {

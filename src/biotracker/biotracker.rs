@@ -303,10 +303,10 @@ impl Core {
                 self.state.set_playback_state(state)?;
             }
             Command::RecordingState(state) => {
-                self.state.set_recording_state(state)?;
                 if state == RecordingState::Finished as i32 {
                     self.finish_recording().await?;
                 }
+                self.state.set_recording_state(state)?;
             }
             Command::RealtimeMode(wait) => {
                 self.state.experiment.realtime_mode = wait;
@@ -320,8 +320,8 @@ impl Core {
             Command::OpenTrack(path) => {
                 self.open_track(path).await?;
             }
-            Command::VideoEncoderConfig(config) => {
-                self.state.initialize_video_encoder(config)?;
+            Command::InitializeRecording(config) => {
+                self.state.initialize_recording(config)?;
             }
             Command::AddEntity(_) => {
                 self.state.add_entity()?;
@@ -348,29 +348,25 @@ impl Core {
             return;
         }
 
-        let encoder_config = &self
-            .state
-            .experiment
-            .video_encoder_config
-            .as_ref()
-            .expect("VideoEncoder Config not set");
-        if encoder_config.image_stream_id != image.stream_id {
-            return;
-        }
+        if let Some(config) = &self.state.experiment.recording_config {
+            if config.image_stream_id != image.stream_id {
+                return;
+            }
 
-        let encoder = self
-            .state
-            .video_encoder
-            .clone()
-            .expect("VideoEncoder not running");
-        let image = image.clone();
-        *encoder_task = Some(tokio::task::spawn_blocking(move || {
-            encoder
-                .lock()
-                .unwrap()
-                .add_frame(image)
-                .expect("Error while encoding image");
-        }));
+            let encoder = self
+                .state
+                .video_encoder
+                .clone()
+                .expect("VideoEncoder not running");
+            let image = image.clone();
+            *encoder_task = Some(tokio::task::spawn_blocking(move || {
+                encoder
+                    .lock()
+                    .unwrap()
+                    .add_frame(image)
+                    .expect("Error while encoding image");
+            }));
+        }
     }
 
     fn start_decoder_task(
@@ -405,7 +401,6 @@ impl Core {
         let save_request = TrackSaveRequest {
             experiment: Some(self.state.experiment.clone()),
             tracks: self.state.tracks.clone(),
-            save_path: "test".to_string(),
         };
         self.state
             .track_recorder
@@ -413,6 +408,7 @@ impl Core {
             .expect("TrackRecorder not running")
             .save(save_request)
             .await?;
+
         Ok(())
     }
 

@@ -105,8 +105,8 @@ impl BioTrackerUI {
                 }
             }
 
-            if let Some(encoder_config) = &self.context.experiment.video_encoder_config {
-                if encoder_config.image_stream_id == "Annotated" {
+            if let Some(recording_config) = &self.context.experiment.recording_config {
+                if recording_config.image_stream_id == "Annotated" {
                     self.context.image_updated = true;
                 }
             }
