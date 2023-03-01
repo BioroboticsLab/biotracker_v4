@@ -3,14 +3,14 @@ use crate::biotracker::{protocol::*, DoubleBuffer};
 use anyhow::Result;
 use core::num::NonZeroU32;
 use cv::prelude::*;
-use egui::mutex::RwLock;
+use egui::{mutex::RwLock, RawInput};
 use egui_wgpu::wgpu;
 use std::sync::Arc;
 
 pub struct OffscreenRenderer {
     pub render_state: egui_wgpu::RenderState,
     pub texture: Texture,
-    context: egui::Context,
+    pub context: egui::Context,
     copy_buffer: Option<wgpu::Buffer>,
     image_history: DoubleBuffer,
     bytes_per_row: NonZeroU32,
@@ -59,10 +59,7 @@ impl OffscreenRenderer {
         }
     }
 
-    pub fn render(&mut self, run_ui: impl FnOnce(&egui::Context)) {
-        let full_output = self.context.run(egui::RawInput::default(), |ui| {
-            run_ui(ui);
-        });
+    pub fn render(&mut self, full_output: egui::FullOutput, copy_texture: bool) {
         let clipped_primitives = self.context.tessellate(full_output.shapes);
         let mut encoder =
             self.render_state
@@ -76,6 +73,30 @@ impl OffscreenRenderer {
             size_in_pixels: [self.texture.size.width, self.texture.size.height],
             pixels_per_point: 1.0,
         };
+
+        if copy_texture {
+            let rows = self.texture.size.height;
+            let copy_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("egui_copy_buffer"),
+                size: (rows * self.bytes_per_row.get()) as u64,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            encoder.copy_texture_to_buffer(
+                self.texture.handle.as_image_copy(),
+                wgpu::ImageCopyBuffer {
+                    buffer: &copy_buffer,
+                    layout: wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(self.bytes_per_row),
+                        rows_per_image: None,
+                    },
+                },
+                self.texture.size,
+            );
+            self.copy_buffer = Some(copy_buffer);
+        }
+
         let user_cmd_bufs = {
             let mut renderer = render_state.renderer.write();
             for (id, image_delta) in &full_output.textures_delta.set {
@@ -120,28 +141,6 @@ impl OffscreenRenderer {
                 renderer.free_texture(id);
             }
         }
-
-        let rows = self.texture.size.height;
-        let copy_buffer = render_state.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("egui_copy_buffer"),
-            size: (rows * self.bytes_per_row.get()) as u64,
-            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
-
-        encoder.copy_texture_to_buffer(
-            self.texture.handle.as_image_copy(),
-            wgpu::ImageCopyBuffer {
-                buffer: &copy_buffer,
-                layout: wgpu::ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(self.bytes_per_row),
-                    rows_per_image: None,
-                },
-            },
-            self.texture.size,
-        );
-        self.copy_buffer = Some(copy_buffer);
 
         let encoded = encoder.finish();
         // Submit the commands: both the main buffer and user-defined ones.
@@ -194,5 +193,56 @@ impl OffscreenRenderer {
             return Ok(image);
         }
         Err(anyhow::anyhow!("No copy buffer"))
+    }
+
+    pub fn transform_events(&self, screen_rect: egui::Rect, events: Vec<egui::Event>) -> RawInput {
+        let transform = egui::emath::RectTransform::from_to(
+            screen_rect,
+            egui::Rect::from_min_size(
+                egui::pos2(0.0, 0.0),
+                egui::vec2(
+                    self.texture.size.width as f32,
+                    self.texture.size.height as f32,
+                ),
+            ),
+        );
+        let events = events
+            .into_iter()
+            .filter_map(|e| match e {
+                egui::Event::PointerMoved(pos) => {
+                    Some(egui::Event::PointerMoved(transform.transform_pos(pos)))
+                }
+                egui::Event::PointerButton {
+                    pos,
+                    pressed,
+                    button,
+                    modifiers,
+                } => Some(egui::Event::PointerButton {
+                    pos: transform.transform_pos(pos),
+                    pressed,
+                    button,
+                    modifiers,
+                }),
+                egui::Event::Touch {
+                    device_id,
+                    id,
+                    phase,
+                    pos,
+                    force,
+                } => Some(egui::Event::Touch {
+                    device_id,
+                    id,
+                    phase,
+                    pos: transform.transform_pos(pos),
+                    force,
+                }),
+                _ => None,
+            })
+            .collect();
+        egui::RawInput {
+            events,
+            pixels_per_point: Some(1.0),
+            ..Default::default()
+        }
     }
 }

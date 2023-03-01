@@ -6,7 +6,6 @@ use super::{
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
     metrics::MetricsPlot,
-    offscreen_renderer::OffscreenRenderer,
     record_button::RecordButton,
     settings::{file_open_buttons, open_video, settings_window},
 };
@@ -28,10 +27,8 @@ pub struct BioTrackerUIContext {
     pub experiment: Experiment,
     pub persistent_state: PersistentState,
     pub current_frame_number: u32,
-    pub render_offscreen: bool,
+    pub image_updated: bool,
     pub current_image: Option<Image>,
-    pub current_entities: Option<Entities>,
-    pub current_features: Option<Features>,
     pub color_palette: Palette,
     pub entity_switcher_open: bool,
     pub annotator_open: bool,
@@ -39,7 +36,6 @@ pub struct BioTrackerUIContext {
 }
 
 pub struct BioTrackerUIComponents {
-    pub offscreen_renderer: OffscreenRenderer,
     pub video_view: AnnotatedVideo,
     pub entity_switcher: EntitySwitcher,
     pub annotator: Annotator,
@@ -76,31 +72,21 @@ impl BioTrackerUI {
             .wgpu_render_state
             .as_ref()
             .expect("WGPU render state not available");
-        let offscreen_renderer = OffscreenRenderer::new(
-            render_state.device.clone(),
-            render_state.queue.clone(),
-            1024,
-            1024,
-        );
-
         Some(Self {
             context: BioTrackerUIContext {
                 bt,
                 experiment: Experiment::default(),
                 persistent_state,
                 current_frame_number: 0,
-                render_offscreen: false,
+                image_updated: false,
                 current_image: None,
-                current_entities: None,
-                current_features: None,
                 color_palette: Palette { colors: &ALPHABET },
                 entity_switcher_open: false,
                 annotator_open: false,
                 experiment_setup_open: false,
             },
             components: BioTrackerUIComponents {
-                offscreen_renderer,
-                video_view: AnnotatedVideo::new(),
+                video_view: AnnotatedVideo::new(render_state),
                 entity_switcher: EntitySwitcher::default(),
                 annotator: Annotator::default(),
                 record_button: RecordButton::default(),
@@ -121,27 +107,13 @@ impl BioTrackerUI {
 
             if let Some(encoder_config) = &self.context.experiment.video_encoder_config {
                 if encoder_config.image_stream_id == "Annotated" {
-                    self.context.render_offscreen = true;
+                    self.context.image_updated = true;
                 }
             }
 
             self.context.current_image = Some(image.clone());
             let render_state = frame.wgpu_render_state().unwrap();
-            if self.components.offscreen_renderer.texture.size.width != image.width
-                || self.components.offscreen_renderer.texture.size.height != image.height
-            {
-                self.components.offscreen_renderer = OffscreenRenderer::new(
-                    render_state.device.clone(),
-                    render_state.queue.clone(),
-                    image.width,
-                    image.height,
-                );
-            }
-            self.components.video_view.update_image(
-                image,
-                render_state,
-                &self.components.offscreen_renderer.render_state,
-            );
+            self.components.video_view.update_image(image, render_state);
             self.context.current_frame_number = image.frame_number;
         }
     }
@@ -149,8 +121,6 @@ impl BioTrackerUI {
     fn update_context(&mut self, frame: &mut eframe::Frame) {
         self.context.experiment = self.context.bt.get_state().unwrap();
         self.update_image(frame);
-        self.context.current_features = self.context.experiment.last_features.clone();
-        self.context.current_entities = self.context.experiment.last_entities.clone();
     }
 
     fn handle_shortcuts(&mut self, ctx: &egui::Context) -> Result<()> {
@@ -187,9 +157,6 @@ impl BioTrackerUI {
 
 impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.components
-            .video_view
-            .update_scale(ctx.input(|input| input.zoom_delta()));
         self.update_context(frame);
         self.handle_shortcuts(ctx).unwrap();
 
@@ -268,43 +235,19 @@ impl eframe::App for BioTrackerUI {
         egui::CentralPanel::default().show(ctx, |ui| {
             settings_window(ui, &mut self.context, &mut self.components);
             // Video view
-            egui::ScrollArea::both()
-                .max_width(f32::INFINITY)
-                .max_height(f32::INFINITY)
-                .show(ui, |ui| {
-                    self.components
-                        .video_view
-                        .show_onscreen(ui, &mut self.context);
-                    self.components.entity_switcher.show(ctx, &mut self.context);
-                });
+            self.components.video_view.show(ui, &mut self.context);
+            self.components.entity_switcher.show(ctx, &mut self.context);
             // Metrics view
             if self.components.metrics_plot.open {
                 self.components.metrics_plot.show(ui, &mut self.context);
             }
         });
 
-        if self.context.render_offscreen {
-            self.components.offscreen_renderer.render(|ctx| {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    self.components
-                        .video_view
-                        .show_offscreen(ui, &mut self.context);
-                });
-            });
-        }
         ctx.request_repaint();
     }
 
     fn post_rendering(&mut self, _window_size_px: [u32; 2], _frame: &eframe::Frame) {
-        if self.context.render_offscreen {
-            let image = self
-                .components
-                .offscreen_renderer
-                .texture_to_image(self.context.current_frame_number)
-                .unwrap();
-            self.context.render_offscreen = false;
-            self.context.bt.add_image(image).unwrap();
-        }
+        self.components.video_view.post_rendering(&mut self.context);
     }
 
     fn on_exit(&mut self) {
