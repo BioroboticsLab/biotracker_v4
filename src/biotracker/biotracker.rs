@@ -353,22 +353,6 @@ impl Core {
             return;
         }
 
-        if let Some(task) = &encoder_task {
-            if !task.is_finished() {
-                self.state
-                    .experiment
-                    .tracking_metrics
-                    .as_mut()
-                    .unwrap()
-                    .encoder_dropped_frames += 1;
-                eprintln!(
-                    "VideoEncoder too slow, dropping frame {}",
-                    image.frame_number
-                );
-                return;
-            }
-        }
-
         let encoder = self
             .state
             .video_encoder
@@ -379,7 +363,7 @@ impl Core {
             encoder
                 .lock()
                 .unwrap()
-                .add_image(image)
+                .add_frame(image)
                 .expect("Error while encoding image");
         }));
     }

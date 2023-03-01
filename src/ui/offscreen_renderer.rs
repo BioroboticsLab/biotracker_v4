@@ -152,8 +152,7 @@ impl OffscreenRenderer {
     pub fn texture_to_image(&mut self, frame_number: u32) -> Result<Image> {
         if let Some(copy_buffer) = self.copy_buffer.take() {
             let (width, height) = (self.texture.size.width, self.texture.size.height);
-            let bgr_buffer_len = (width * height * 3) as usize;
-            let bgr_buffer = self.image_history.get(bgr_buffer_len);
+            let bgr_shared_image = self.image_history.get_mut(width, height, 3)?;
             let rgba_buffer_slice = copy_buffer.slice(..);
             let (tx, rx) = std::sync::mpsc::channel();
             rgba_buffer_slice.map_async(wgpu::MapMode::Read, move |r| {
@@ -173,21 +172,21 @@ impl OffscreenRenderer {
                     rgba_buffer_view.as_ptr() as *mut _,
                     self.bytes_per_row.get() as usize,
                 )?;
-                let mut bgr_mat = Mat::new_size_with_data(
-                    cv::core::Size::new(width as i32, height as i32),
-                    cv::core::CV_8UC3,
-                    bgr_buffer.as_ptr() as *mut std::ffi::c_void,
-                    cv::core::Mat_AUTO_STEP,
-                )?;
-                cv::imgproc::cvt_color(&rgba_mat, &mut bgr_mat, cv::imgproc::COLOR_RGBA2BGR, 0)
-                    .unwrap();
+                cv::imgproc::cvt_color(
+                    &rgba_mat,
+                    &mut bgr_shared_image.mat,
+                    cv::imgproc::COLOR_RGBA2BGR,
+                    0,
+                )
+                .unwrap();
             }
             let image = Image {
                 stream_id: "Annotated".to_string(),
-                shm_id: bgr_buffer.id().to_owned(),
+                shm_id: bgr_shared_image.id().to_owned(),
                 width: self.texture.size.width,
                 height: self.texture.size.height,
                 frame_number,
+                channels: 3,
             };
             self.copy_buffer = None;
             return Ok(image);

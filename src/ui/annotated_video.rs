@@ -1,13 +1,10 @@
 use super::{
-    annotator::Annotator,
-    app::BioTrackerUIContext,
-    offscreen_renderer::{self, OffscreenRenderer},
-    rectification::Rectification,
-    texture::Texture,
+    annotator::Annotator, app::BioTrackerUIContext, offscreen_renderer::OffscreenRenderer,
+    rectification::Rectification, texture::Texture,
 };
 use crate::biotracker::{
     protocol::{Feature, Image, SkeletonDescriptor},
-    SharedBuffer,
+    DoubleBuffer,
 };
 use cv::prelude::*;
 use egui_wgpu::wgpu;
@@ -25,6 +22,7 @@ pub struct AnnotatedVideo {
     annotator: Annotator,
     rectification: Rectification,
     offscreen_renderer: OffscreenRenderer,
+    image_buffers: DoubleBuffer,
 }
 
 impl AnnotatedVideo {
@@ -44,14 +42,15 @@ impl AnnotatedVideo {
             annotator: Annotator::default(),
             rectification: Rectification::default(),
             offscreen_renderer,
+            image_buffers: DoubleBuffer::new(),
         }
     }
 
     pub fn update_image(&mut self, image: &Image, render_state: &egui_wgpu::RenderState) {
-        let image_buffer = match SharedBuffer::open(&image.shm_id) {
-            Ok(buffer) => buffer,
+        let bgr_image = match self.image_buffers.get(image) {
+            Ok(img) => img,
             Err(e) => {
-                eprintln!("Failed to open shared buffer: {}", e);
+                eprintln!("Failed to open shared image: {}", e);
                 return;
             }
         };
@@ -87,13 +86,6 @@ impl AnnotatedVideo {
 
         let rgba_data = vec![0; (image.width * image.height * 4) as usize];
         unsafe {
-            let bgr_mat = Mat::new_size_with_data(
-                cv::core::Size::new(image.width as i32, image.height as i32),
-                cv::core::CV_8UC3,
-                image_buffer.as_ptr() as *mut std::ffi::c_void,
-                cv::core::Mat_AUTO_STEP,
-            )
-            .unwrap();
             let mut rgba_mat = Mat::new_size_with_data(
                 cv::core::Size::new(image.width as i32, image.height as i32),
                 cv::core::CV_8UC4,
@@ -101,8 +93,13 @@ impl AnnotatedVideo {
                 cv::core::Mat_AUTO_STEP,
             )
             .unwrap();
-            cv::imgproc::cvt_color(&bgr_mat, &mut rgba_mat, cv::imgproc::COLOR_BGR2RGBA, 0)
-                .unwrap();
+            cv::imgproc::cvt_color(
+                &bgr_image.mat,
+                &mut rgba_mat,
+                cv::imgproc::COLOR_BGR2RGBA,
+                0,
+            )
+            .unwrap();
         }
         self.image_texture
             .as_mut()

@@ -24,5 +24,5 @@ pub use protocol::*;
 pub use python_process::PythonProcess;
 pub use robofish_commander::RobofishCommander;
 pub use service::Service;
-pub use shared_buffer::{DoubleBuffer, SharedBuffer};
+pub use shared_buffer::DoubleBuffer;
 pub use state::State;

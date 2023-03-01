@@ -183,24 +183,17 @@ impl VideoDecoder {
 
     pub fn get_image(&mut self) -> Result<Image> {
         let frame_number = self.playback.frame_number;
-        let buffer_len = (self.info.width * self.info.height * 3) as usize;
-        let buffer = self.buffer_manager.get(buffer_len);
-        unsafe {
-            let data_ptr = buffer.as_ptr();
-            let mut mat = Mat::new_size_with_data(
-                cv::core::Size::new(self.info.width as i32, self.info.height as i32),
-                cv::core::CV_8UC3,
-                data_ptr as *mut std::ffi::c_void,
-                cv::core::Mat_AUTO_STEP,
-            )?;
-            self.playback.sampler.get_image(&mut mat)?;
-        }
+        let shared_image = self
+            .buffer_manager
+            .get_mut(self.info.width, self.info.height, 3)?;
+        self.playback.sampler.get_image(&mut shared_image.mat)?;
         let image = Image {
             stream_id: "Tracking".to_owned(),
             frame_number,
-            shm_id: buffer.id().to_owned(),
+            shm_id: shared_image.id().to_owned(),
             width: self.info.width,
             height: self.info.height,
+            channels: 3,
         };
         self.playback.frame_number += 1;
         Ok(image)
