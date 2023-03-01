@@ -13,6 +13,7 @@ pub mod robofish_commander;
 pub mod service;
 pub mod shared_buffer;
 pub mod state;
+pub mod tracking;
 
 pub use biotracker::Core;
 pub use channel::ChannelRequest;

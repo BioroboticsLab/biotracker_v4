@@ -1,6 +1,6 @@
 use super::{
-    arena::px_to_cm, protocol::*, ChannelRequest, CommandLineArguments, ComponentConfig,
-    MatcherService, PythonProcess, RobofishCommander, Service, State,
+    protocol::*, tracking::start_tracking_task, ChannelRequest, CommandLineArguments,
+    ComponentConfig, MatcherService, PythonProcess, RobofishCommander, Service, State,
 };
 use anyhow::Result;
 use bio_tracker_server::BioTrackerServer;
@@ -246,7 +246,8 @@ impl Core {
                             self.state.handle_image_result(image.clone());
                             if tracking_task.is_none() {
                                 let switch_request = self.state.switch_request.take();
-                                self.start_tracking_task(
+                                start_tracking_task(
+                                    &self.state,
                                     switch_request,
                                     &mut tracking_task,
                                     &tracking_tx,
@@ -274,7 +275,8 @@ impl Core {
                             if let Some(image) =  &self.state.experiment.last_image {
                                 if image.frame_number != frame_number {
                                     let switch_request = self.state.switch_request.take();
-                                    self.start_tracking_task(
+                                    start_tracking_task(
+                                        &self.state,
                                         switch_request,
                                         &mut tracking_task,
                                         &tracking_tx,
@@ -369,130 +371,6 @@ impl Core {
                 .add_frame(image)
                 .expect("Error while encoding image");
         }));
-    }
-
-    fn start_tracking_task(
-        &self,
-        entity_switch_request: Option<EntityIdSwitch>,
-        tracking_task: &mut Option<tokio::task::JoinHandle<()>>,
-        tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features, Entities)>>,
-        image: &Image,
-    ) {
-        let image = image.clone();
-        let detector = self
-            .state
-            .feature_detector
-            .clone()
-            .expect("Feature Detector not running");
-        let matcher = self.state.matcher.clone().unwrap();
-        let last_entities = self
-            .state
-            .experiment
-            .last_entities
-            .as_ref()
-            .expect("last_entities is None");
-
-        let mut tracking_entities = Entities::default();
-        for id in &self.state.experiment.entity_ids {
-            if let Some(entity) = last_entities.entities.iter().find(|e| e.id == *id) {
-                tracking_entities.entities.push(entity.clone());
-            } else {
-                tracking_entities.entities.push(Entity {
-                    id: *id,
-                    feature: None,
-                    frame_number: 0,
-                });
-            }
-        }
-
-        if let Some(switch_request) = entity_switch_request {
-            let (mut first_idx, mut second_idx) = (None, None);
-            for (idx, entity) in tracking_entities.entities.iter().enumerate() {
-                if entity.id == switch_request.id1 {
-                    first_idx = Some(idx);
-                }
-                if entity.id == switch_request.id2 {
-                    second_idx = Some(idx);
-                }
-            }
-
-            if let (Some(first_idx), Some(second_idx)) = (first_idx, second_idx) {
-                tracking_entities.entities[first_idx].id = switch_request.id2;
-                tracking_entities.entities[second_idx].id = switch_request.id1;
-            }
-        }
-
-        let arena = self.state.experiment.arena.clone();
-        let rectification_transform = self.state.rectification_transform.clone();
-        let tracking_tx = tracking_tx.clone();
-        *tracking_task = Some(tokio::spawn(async move {
-            let result = Core::tracking_task(
-                image,
-                detector,
-                matcher,
-                arena,
-                rectification_transform,
-                tracking_entities,
-            )
-            .await;
-            tracking_tx.send(result).await.unwrap();
-        }));
-    }
-
-    async fn tracking_task(
-        image: Image,
-        mut detector: FeatureDetectorClient<tonic::transport::Channel>,
-        mut matcher: MatcherClient<tonic::transport::Channel>,
-        arena: Option<Arena>,
-        rectification_transform: cv::prelude::Mat,
-        last_entities: Entities,
-    ) -> Result<(u32, Features, Entities)> {
-        let frame_number = image.frame_number;
-        let detector_request = DetectorRequest {
-            image: Some(image),
-            arena,
-        };
-        let mut features = detector
-            .detect_features(detector_request)
-            .await?
-            .into_inner();
-
-        if let Some(skeleton) = &features.skeleton {
-            for feature in features.features.iter_mut() {
-                let front = &feature.nodes[skeleton.front_index as usize];
-                let center = &feature.nodes[skeleton.center_index as usize];
-                let front = px_to_cm(
-                    &cv::core::Point2f::new(front.x, front.y),
-                    &rectification_transform,
-                )?;
-                let center = px_to_cm(
-                    &cv::core::Point2f::new(center.x, center.y),
-                    &rectification_transform,
-                )?;
-
-                let midline = front - center;
-                let direction = midline / midline.norm() as f32;
-                let mut orientation_rad =
-                    direction.x.atan2(direction.y) + std::f32::consts::PI / 2.0;
-                if orientation_rad.is_nan() {
-                    // happens if center == front
-                    orientation_rad = 0.0;
-                }
-                feature.pose = Some(Pose {
-                    orientation_rad,
-                    x_cm: center.x,
-                    y_cm: center.y,
-                });
-            }
-        }
-
-        let matcher_request = MatcherRequest {
-            features: Some(features.clone()),
-            last_entities: Some(last_entities),
-            frame_number,
-        };
-        let entities = matcher.match_features(matcher_request).await?.into_inner();
-        Ok((frame_number, features, entities))
     }
 
     fn start_decoder_task(
