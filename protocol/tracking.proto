@@ -49,4 +49,6 @@ message SkeletonEdge {
 message SkeletonDescriptor {
   repeated SkeletonEdge edges = 1;
   repeated string node_names = 2;
+  uint32 front_index = 3;
+  uint32 center_index = 4;
 }

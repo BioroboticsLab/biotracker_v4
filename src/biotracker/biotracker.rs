@@ -1,6 +1,6 @@
 use super::{
-    protocol::*, ChannelRequest, CommandLineArguments, ComponentConfig, MatcherService,
-    PythonProcess, RobofishCommander, Service, State,
+    arena::px_to_cm, protocol::*, ChannelRequest, CommandLineArguments, ComponentConfig,
+    MatcherService, PythonProcess, RobofishCommander, Service, State,
 };
 use anyhow::Result;
 use bio_tracker_server::BioTrackerServer;
@@ -333,6 +333,9 @@ impl Core {
             Command::TargetFps(fps) => {
                 self.state.experiment.target_fps = fps;
             }
+            Command::UpdateArena(arena) => {
+                self.state.update_arena(arena)?;
+            }
             Command::Shutdown(_) => {}
         }
         Ok(Empty {})
@@ -420,10 +423,18 @@ impl Core {
         }
 
         let arena = self.state.experiment.arena.clone();
+        let rectification_transform = self.state.rectification_transform.clone();
         let tracking_tx = tracking_tx.clone();
         *tracking_task = Some(tokio::spawn(async move {
-            let result =
-                Core::tracking_task(image, detector, matcher, arena, tracking_entities).await;
+            let result = Core::tracking_task(
+                image,
+                detector,
+                matcher,
+                arena,
+                rectification_transform,
+                tracking_entities,
+            )
+            .await;
             tracking_tx.send(result).await.unwrap();
         }));
     }
@@ -433,6 +444,7 @@ impl Core {
         mut detector: FeatureDetectorClient<tonic::transport::Channel>,
         mut matcher: MatcherClient<tonic::transport::Channel>,
         arena: Option<Arena>,
+        rectification_transform: cv::prelude::Mat,
         last_entities: Entities,
     ) -> Result<(u32, Features, Entities)> {
         let frame_number = image.frame_number;
@@ -440,10 +452,40 @@ impl Core {
             image: Some(image),
             arena,
         };
-        let features = detector
+        let mut features = detector
             .detect_features(detector_request)
             .await?
             .into_inner();
+
+        if let Some(skeleton) = &features.skeleton {
+            for feature in features.features.iter_mut() {
+                let front = &feature.nodes[skeleton.front_index as usize];
+                let center = &feature.nodes[skeleton.center_index as usize];
+                let front = px_to_cm(
+                    &cv::core::Point2f::new(front.x, front.y),
+                    &rectification_transform,
+                )?;
+                let center = px_to_cm(
+                    &cv::core::Point2f::new(center.x, center.y),
+                    &rectification_transform,
+                )?;
+
+                let midline = front - center;
+                let direction = midline / midline.norm() as f32;
+                let mut orientation_rad =
+                    direction.x.atan2(direction.y) + std::f32::consts::PI / 2.0;
+                if orientation_rad.is_nan() {
+                    // happens if center == front
+                    orientation_rad = 0.0;
+                }
+                feature.pose = Some(Pose {
+                    orientation_rad,
+                    x_cm: center.x,
+                    y_cm: center.y,
+                });
+            }
+        }
+
         let matcher_request = MatcherRequest {
             features: Some(features.clone()),
             last_entities: Some(last_entities),

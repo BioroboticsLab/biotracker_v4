@@ -1,3 +1,4 @@
+pub mod arena;
 pub mod biotracker;
 pub mod channel;
 pub mod cli;

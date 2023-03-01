@@ -14,6 +14,7 @@ pub struct AnnotatedVideo {
     pub draw_entities: bool,
     pub draw_node_labels: bool,
     pub draw_ids: bool,
+    pub draw_rectification: bool,
     image_updated: bool,
     render_texture_id: egui::TextureId,
     image_texture_id: egui::TextureId,
@@ -34,6 +35,7 @@ impl AnnotatedVideo {
             draw_entities: true,
             draw_node_labels: false,
             draw_ids: true,
+            draw_rectification: true,
             image_updated: false,
             render_texture_id: offscreen_texture_id,
             image_texture_id: egui::TextureId::default(),
@@ -291,7 +293,9 @@ impl AnnotatedVideo {
         }
 
         self.annotator.show(&response, &painter, ctx);
-        self.rectification.show(ui, &response, &painter, ctx);
+        if self.draw_rectification {
+            self.rectification.show(ui, &response, &painter, ctx);
+        }
     }
 }
 

@@ -32,7 +32,6 @@ class SLEAPTracker(FeatureDetectorBase):
                 scale_y = self.target_width / request.image.width
                 node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
                 feature.nodes.append(node)
-            await self.calculate_pose(feature, request.arena, request.image)
             features.features.append(feature)
         return features
 
@@ -62,33 +61,19 @@ class SLEAPTracker(FeatureDetectorBase):
         edges = []
         for from_idx, to_idx in sleap_skeleton.edge_inds:
             edges.append(SkeletonEdge(source=from_idx, target=to_idx))
+        front_node_index = None
+        center_node_index = None
         for i,name in enumerate(sleap_skeleton.node_names):
             if name == front_node:
-                self.front_node_index = i
+                front_node_index = i
             if name == center_node:
-                self.center_node_index = i
-        assert(self.front_node_index is not None and self.center_node_index is not None)
+                center_node_index = i
+        assert(front_node_index is not None and center_node_index is not None)
         skeleton_descriptor = SkeletonDescriptor(edges=edges,
-                                                 node_names=sleap_skeleton.node_names)
+                                                 node_names=sleap_skeleton.node_names,
+                                                 front_index=front_node_index,
+                                                 center_index=center_node_index)
         self.skeleton = skeleton_descriptor
-
-    async def calculate_pose(self, feature, arena, image):
-        assert(len(feature.nodes) >= 2)
-        center = feature.nodes[self.center_node_index]
-        front = feature.nodes[self.front_node_index]
-        (x1, y1) = await self.pixel_to_world(center.x, center.y, arena, image)
-        (x2, y2) = await self.pixel_to_world(front.x, front.y, arena, image)
-        midline = np.array([x2 - x1, y2 - y1])
-        direction = midline / np.linalg.norm(midline)
-        orientation_rad = np.arctan2(direction[0], direction[1]) + np.pi / 2.0;
-        if math.isnan(orientation_rad):
-            # happens if center == front
-            orientation_rad = 0
-        feature.pose = Pose(x_cm=x1, y_cm=y1, orientation_rad=orientation_rad)
-
-    async def pixel_to_world(self, x, y, arena, image):
-        return [x * arena.width_cm / image.width - arena.width_cm / 2,
-                -(y * arena.height_cm / image.height - arena.height_cm / 2)]
 
 async def main():
     addr, port = get_address_and_port()

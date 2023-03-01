@@ -14,16 +14,24 @@ enum ServiceType {
 }
 
 message Empty {}
+message Point {
+    float x = 1;
+    float y = 2;
+}
 
 message Arena {
-  uint32 width_cm = 3;
-  uint32 height_cm = 4;
+    uint32 width_cm = 3;
+    uint32 height_cm = 4;
+    // corners of rectification rectangle in pixel space, in clockwise order
+    repeated Point rectification_corners = 5;
 }
 
 message EntityIDSwitch {
   uint32 id1 = 1;
   uint32 id2 = 2;
 }
+
+message Transform {}
 
 message BioTrackerCommand {
     oneof command {
@@ -38,6 +46,7 @@ message BioTrackerCommand {
         uint32 remove_entity = 6;
         VideoEncoderConfig video_encoder_config = 7;
         EntityIDSwitch switch_entities = 10;
+        Arena update_arena = 13;
         Empty shutdown = 8;
     }
 }
@@ -65,6 +74,7 @@ message Experiment {
     optional Features last_features = 11;
     optional Entities last_entities = 10;
     repeated uint32 entity_ids = 13;
+    optional Transform rectification = 15;
 }
 
 service BioTracker {

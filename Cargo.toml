@@ -24,7 +24,7 @@ anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 pathfinding = "3.0"
 rand = "0.8"
-cv = { package= "opencv", version="0.75", default-features = false, features = ["imgproc", "videoio"] }
+cv = { package= "opencv", version="0.75", default-features = false, features = ["imgproc", "videoio", "calib3d"] }
 pylon-cxx = { version = "0.3.4", optional = true }
 bytemuck = "1.13.0"
 chrono = "0.4.23"

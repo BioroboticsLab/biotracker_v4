@@ -16,6 +16,7 @@ pub struct State {
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
     pub metrics: Metrics,
+    pub rectification_transform: cv::prelude::Mat,
     entity_counter: u32,
 }
 
@@ -27,10 +28,12 @@ pub struct Metrics {
 
 impl State {
     pub fn new(config: BiotrackerConfig) -> Self {
+        let arena = config.arena.clone();
+        let rectification_transform = arena.rectification_transform().unwrap();
         Self {
             experiment: Experiment {
                 target_fps: 25.0,
-                arena: Some(config.arena.clone()),
+                arena: Some(arena),
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
                 realtime_mode: true,
@@ -39,6 +42,7 @@ impl State {
                 ..Default::default()
             },
             config,
+            rectification_transform,
             ..Default::default()
         }
     }
@@ -149,6 +153,12 @@ impl State {
 
     pub fn set_playback_state(&mut self, playback_state: i32) -> Result<()> {
         self.experiment.playback_state = playback_state;
+        Ok(())
+    }
+
+    pub fn update_arena(&mut self, arena: Arena) -> Result<()> {
+        self.rectification_transform = arena.rectification_transform()?;
+        self.experiment.arena = Some(arena);
         Ok(())
     }
 }
