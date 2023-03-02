@@ -27,4 +27,7 @@ pub struct CommandLineArguments {
     /// Seek to frame
     #[arg(long)]
     pub seek: Option<u32>,
+    /// Number of OpenCV worker threads
+    #[arg(long, default_value_t = 4)]
+    pub cv_worker_threads: u32,
 }

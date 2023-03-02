@@ -43,9 +43,6 @@ class TrackRecorder(TrackRecorderBase):
                 (poses,outlines) = self.track_to_poses(track, start_frame_number, skeleton)
                 f.create_entity(category='organism', name=f'fish_{id}', poses=poses)
 
-        if len(tracks) > 0:
-            self.plot(f, path)
-
     def preprocess_tracks(self, tracks):
         processed = {}
         min_frame_number = 2**32

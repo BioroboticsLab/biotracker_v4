@@ -9,6 +9,8 @@ mod util;
 
 fn main() {
     let args = CommandLineArguments::parse();
+    cv::core::set_num_threads(args.cv_worker_threads as i32).unwrap();
+
     let args_copy = args.clone();
 
     let rt = Arc::new(

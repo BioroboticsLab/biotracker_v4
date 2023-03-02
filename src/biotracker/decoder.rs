@@ -36,9 +36,9 @@ trait VideoSampler {
 }
 
 impl Playback {
-    fn open(uri: String) -> Result<(Playback, VideoInfo)> {
+    fn open(uri: String, fps: f64) -> Result<(Playback, VideoInfo)> {
         if uri.starts_with("pylon:///") {
-            Playback::open_basler(uri)
+            Playback::open_basler(uri, fps)
         } else {
             Playback::open_cv(uri)
         }
@@ -75,7 +75,7 @@ impl Playback {
     }
 
     #[cfg(feature = "pylon")]
-    fn open_basler(camera_id: String) -> Result<(Playback, VideoInfo)> {
+    fn open_basler(camera_id: String, fps: f64) -> Result<(Playback, VideoInfo)> {
         let pylon = Box::pin(pylon_cxx::Pylon::new());
         // Safety:
         // - pylon is pinned
@@ -103,7 +103,10 @@ impl Playback {
         let frame_count = 0;
         let width = camera.node_map().integer_node("Width")?.value()? as u32;
         let height = camera.node_map().integer_node("Height")?.value()? as u32;
-        let fps = 25.0;
+        camera
+            .node_map()
+            .float_node("AcquisitionFrameRate")?
+            .set_value(fps)?;
         let pylon_camera = Box::new(PylonCamera {
             _pylon_raii: pylon,
             camera,
@@ -128,15 +131,19 @@ impl Playback {
 #[cfg(feature = "pylon")]
 impl VideoSampler for PylonCamera<'_> {
     fn get_image(&mut self, mat: &mut Mat) -> Result<()> {
-        for _ in 0..10 {
+        for i in 0..100 {
             self.camera.retrieve_result(
-                2000,
+                1000,
                 &mut self.grab_result,
-                pylon_cxx::TimeoutHandling::ThrowException,
+                pylon_cxx::TimeoutHandling::Return,
             )?;
 
             if !self.grab_result.grab_succeeded()? {
                 continue;
+            }
+
+            if i > 0 {
+                eprintln!("Warning: grabbing image took {} retries", i);
             }
 
             let pylon_buffer = self.grab_result.buffer()?;
@@ -172,8 +179,8 @@ impl VideoSampler for VideoCapture {
 }
 
 impl VideoDecoder {
-    pub fn new(path: String) -> Result<Self> {
-        let (playback, info) = Playback::open(path)?;
+    pub fn new(path: String, fps: f64) -> Result<Self> {
+        let (playback, info) = Playback::open(path, fps)?;
         Ok(Self {
             info,
             playback,

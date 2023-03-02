@@ -82,7 +82,7 @@ impl State {
     }
 
     pub fn open_video(&mut self, path: String) -> Result<VideoInfo> {
-        let decoder = VideoDecoder::new(path)?;
+        let decoder = VideoDecoder::new(path, self.experiment.target_fps as f64)?;
         let video_info = decoder.info.clone();
         let result = Ok(video_info.clone());
         self.experiment.video_info = Some(video_info);
