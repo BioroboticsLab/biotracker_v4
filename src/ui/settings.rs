@@ -101,23 +101,39 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
             .unwrap();
     }
     ui.end_row();
+    ui.end_row();
+}
+
+pub fn arena_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     let arena = ctx.experiment.arena.as_mut().unwrap();
+    let mut send_update = false;
     ui.add(egui::Label::new("Arena Width"));
-    if ui
+    send_update |= ui
         .add(egui::DragValue::new(&mut arena.width_cm).suffix("cm"))
-        .changed()
-    {
-        eprintln!("Feature not implemented!");
-    }
+        .changed();
     ui.end_row();
     ui.add(egui::Label::new("Arena Height"));
-    if ui
+    send_update |= ui
         .add(egui::DragValue::new(&mut arena.height_cm).suffix("cm"))
-        .changed()
-    {
-        eprintln!("Feature not implemented!");
+        .changed();
+    ui.end_row();
+
+    ui.add(egui::Label::new("Tracking Area Vertices"));
+    let mut vertices = arena.tracking_area_corners.len();
+    if ui.add(egui::DragValue::new(&mut vertices)).changed() {
+        send_update = true;
+        if vertices > arena.tracking_area_corners.len() {
+            let new_points = vec![Point::default(); vertices - arena.tracking_area_corners.len()];
+            arena.tracking_area_corners.extend(new_points);
+        } else {
+            arena.tracking_area_corners.truncate(vertices);
+        }
     }
     ui.end_row();
+
+    if send_update {
+        ctx.bt.command(Command::UpdateArena(arena.clone())).unwrap();
+    }
 }
 
 pub fn settings_window(
@@ -135,6 +151,11 @@ pub fn settings_window(
                 ui.separator();
                 ui.end_row();
                 experiment_settings(ui, ctx);
+
+                ui.heading("Arena");
+                ui.separator();
+                ui.end_row();
+                arena_settings(ui, ctx);
 
                 ui.heading("Video Source");
                 ui.separator();
