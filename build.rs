@@ -3,6 +3,10 @@ use std::io::Result;
 fn main() -> Result<()> {
     tonic_build::configure()
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]")
+        .field_attribute(
+            ".biotracker.ComponentConfig.config_json",
+            "#[serde(deserialize_with=\"from_map\", serialize_with=\"to_map\")]",
+        )
         .compile(
             &[
                 "protocol/message.proto",

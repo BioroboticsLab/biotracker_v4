@@ -37,11 +37,8 @@ pub fn start_tracking_task(
     image: &Image,
 ) {
     let image = image.clone();
-    let detector = state
-        .feature_detector
-        .clone()
-        .expect("Feature Detector not running");
-    let matcher = state.matcher.clone().unwrap();
+    let detector = state.connections.feature_detector().clone();
+    let matcher = state.connections.matcher().clone();
     let last_entities = state
         .experiment
         .last_entities

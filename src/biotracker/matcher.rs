@@ -37,7 +37,7 @@ impl Matcher for MatcherService {
 
     async fn set_config(
         &self,
-        _request: Request<ComponentConfiguration>,
+        _request: Request<ComponentConfig>,
     ) -> Result<Response<Empty>, Status> {
         Ok(Response::new(Empty {}))
     }
@@ -83,6 +83,7 @@ impl MatcherService {
                 let distance_ref = weights.get_mut((feature_idx, last_feature_idx)).unwrap();
                 *distance_ref = if feature_idx >= features.len()
                     || last_entities[last_feature_idx].feature.is_none()
+                    || features[feature_idx].out_of_bounds
                 {
                     1000000
                 } else {

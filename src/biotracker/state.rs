@@ -1,6 +1,8 @@
-use super::arena::ArenaImpl;
-use super::metric::DurationMetric;
-use super::{protocol::*, BiotrackerConfig, VideoDecoder, VideoEncoder};
+use super::component::ComponentConnections;
+use super::{
+    arena::ArenaImpl, metric::DurationMetric, protocol::*, BiotrackerConfig, VideoDecoder,
+    VideoEncoder,
+};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -9,15 +11,13 @@ use std::sync::{Arc, Mutex};
 pub struct State {
     pub config: BiotrackerConfig,
     pub experiment: Experiment,
-    pub feature_detector: Option<FeatureDetectorClient<tonic::transport::Channel>>,
-    pub matcher: Option<MatcherClient<tonic::transport::Channel>>,
-    pub track_recorder: Option<TrackRecorderClient<tonic::transport::Channel>>,
     pub tracks: HashMap<u32, Track>,
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
     pub metrics: Metrics,
     pub arena_impl: ArenaImpl,
+    pub connections: ComponentConnections,
     entity_counter: u32,
 }
 
@@ -29,7 +29,15 @@ pub struct Metrics {
 
 impl State {
     pub fn new(config: BiotrackerConfig) -> Self {
-        let arena = config.arena.clone();
+        let arena = match &config.arena {
+            Some(arena) => arena.clone(),
+            None => Arena {
+                width_cm: 100,
+                height_cm: 100,
+                rectification_corners: vec![],
+                tracking_area_corners: vec![],
+            },
+        };
         Self {
             experiment: Experiment {
                 target_fps: 25.0,
@@ -163,7 +171,7 @@ impl State {
     }
 
     pub fn save_config(&mut self, path: &str) -> Result<()> {
-        self.config.arena = self.arena_impl.arena.clone();
+        self.config.arena = Some(self.arena_impl.arena.clone());
         self.config.save(path)?;
         Ok(())
     }

@@ -49,6 +49,7 @@ message BioTrackerCommand {
         uint32 remove_entity = 6;
         EntityIDSwitch switch_entities = 10;
         Arena update_arena = 13;
+        ComponentConfig update_component = 15;
         Empty save_config = 14;
         Empty shutdown = 8;
     }
@@ -77,6 +78,7 @@ message Experiment {
     optional Entities last_entities = 10;
     repeated uint32 entity_ids = 13;
     optional Transform rectification = 15;
+    repeated ComponentConfig components = 16;
 }
 
 message RecordingConfig {
@@ -91,7 +93,6 @@ service BioTracker {
     rpc get_state(Empty) returns (Experiment) {}
     rpc command(BioTrackerCommand) returns (Empty) {}
     rpc add_image(Image) returns (Empty) {}
-    // rpc log(LogRequest) returns (Empty); // TODO
 }
 
 message DetectorRequest {
@@ -100,7 +101,7 @@ message DetectorRequest {
 }
 
 service FeatureDetector {
-    rpc set_config(ComponentConfiguration) returns (Empty) {}
+    rpc set_config(ComponentConfig) returns (Empty) {}
     rpc detect_features(DetectorRequest) returns (Features);
 }
 
@@ -111,7 +112,7 @@ message MatcherRequest {
 }
 
 service Matcher {
-    rpc set_config(ComponentConfiguration) returns (Empty) {}
+    rpc set_config(ComponentConfig) returns (Empty) {}
     rpc match_features(MatcherRequest) returns (Entities);
 }
 
@@ -129,11 +130,25 @@ message Tracks {
 }
 
 service TrackRecorder {
-    rpc set_config(ComponentConfiguration) returns (Empty) {}
+    rpc set_config(ComponentConfig) returns (Empty) {}
     rpc load(TrackLoadRequest) returns (Tracks);
     rpc save(TrackSaveRequest) returns (Empty);
 }
 
-message ComponentConfiguration {
+message PythonConfig {
+    string venv = 1;
+    string cmd = 2;
+}
+
+message ComponentConfig {
+    string id = 2;
     string config_json = 1;
+    string address = 4;
+    repeated string services = 3;
+    optional PythonConfig python_config = 5;
+}
+
+message BiotrackerConfig {
+    repeated ComponentConfig components = 1;
+    Arena arena = 2;
 }

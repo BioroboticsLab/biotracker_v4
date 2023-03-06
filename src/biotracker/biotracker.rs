@@ -1,7 +1,7 @@
 use super::{
-    protocol::*, tracking::start_tracking_task, BiotrackerConfig, ChannelRequest,
-    CommandLineArguments, ComponentConfig, MatcherService, PythonProcess, RobofishCommander,
-    Service, State,
+    component::ComponentConnections, protocol::*, tracking::start_tracking_task, BiotrackerConfig,
+    ChannelRequest, CommandLineArguments, ComponentConfig, MatcherService, PythonProcess,
+    RobofishCommander, Service, State,
 };
 use anyhow::Result;
 use bio_tracker_server::BioTrackerServer;
@@ -11,7 +11,7 @@ use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
 };
-use tonic::transport::{Channel as ClientChannel, Server};
+use tonic::transport::Server;
 
 pub struct Core {
     args: Arc<CommandLineArguments>,
@@ -21,29 +21,6 @@ pub struct Core {
     state: State,
     state_rx: Receiver<ChannelRequest<(), Experiment>>,
     robofish_commander_bridge: RobofishCommander,
-}
-
-enum GrpcClient {
-    Matcher(MatcherClient<ClientChannel>),
-    FeatureDetector(FeatureDetectorClient<ClientChannel>),
-    TrackRecorder(TrackRecorderClient<ClientChannel>),
-}
-
-impl GrpcClient {
-    pub fn new(channel: ClientChannel, service: &str) -> Result<Self> {
-        let service =
-            ServiceType::from_str_name(service).ok_or(anyhow::anyhow!("Invalid service name"))?;
-        match service {
-            ServiceType::Matcher => Ok(Self::Matcher(MatcherClient::new(channel))),
-            ServiceType::FeatureDetector => {
-                Ok(Self::FeatureDetector(FeatureDetectorClient::new(channel)))
-            }
-            ServiceType::TrackRecorder => {
-                Ok(Self::TrackRecorder(TrackRecorderClient::new(channel)))
-            }
-            ServiceType::BiotrackerCore => Err(anyhow::anyhow!("Invalid service name")),
-        }
-    }
 }
 
 impl Core {
@@ -84,51 +61,12 @@ impl Core {
         })
     }
 
-    pub async fn init(&mut self) -> Result<()> {
+    async fn init(&mut self) -> Result<()> {
         let components = self.state.config.components.clone();
         for component in &components {
             self.start_component(component.clone()).await?;
         }
-        for component in &components {
-            for client in self.connect_component(&component).await? {
-                match client {
-                    GrpcClient::Matcher(mut client) => {
-                        client
-                            .set_config(ComponentConfiguration {
-                                config_json: component.config_json.to_string(),
-                            })
-                            .await?;
-                        self.state.matcher = Some(client);
-                    }
-                    GrpcClient::FeatureDetector(mut client) => {
-                        client
-                            .set_config(ComponentConfiguration {
-                                config_json: component.config_json.to_string(),
-                            })
-                            .await?;
-                        self.state.feature_detector = Some(client);
-                    }
-                    GrpcClient::TrackRecorder(mut client) => {
-                        client
-                            .set_config(ComponentConfiguration {
-                                config_json: component.config_json.to_string(),
-                            })
-                            .await?;
-                        self.state.track_recorder = Some(client);
-                    }
-                }
-            }
-        }
-
-        if self.state.matcher.is_none() {
-            return Err(anyhow::anyhow!("No matcher in config"));
-        }
-        if self.state.feature_detector.is_none() {
-            return Err(anyhow::anyhow!("No feature detector in config"));
-        }
-        if self.state.track_recorder.is_none() {
-            return Err(anyhow::anyhow!("No track recorder in config"));
-        }
+        self.state.connections = ComponentConnections::new(components).await?;
 
         if let Some(video) = &self.args.video {
             match self.state.open_video(video.to_owned()) {
@@ -160,7 +98,7 @@ impl Core {
         Ok(())
     }
 
-    pub async fn finish(&mut self, tasks: &[&Option<JoinHandle<()>>]) -> Result<Empty> {
+    async fn finish(&mut self, tasks: &[&Option<JoinHandle<()>>]) -> Result<Empty> {
         if self.state.experiment.recording_state == RecordingState::Recording as i32 {
             self.finish_recording().await?;
         }
@@ -338,6 +276,9 @@ impl Core {
             Command::UpdateArena(arena) => {
                 self.state.update_arena(arena)?;
             }
+            Command::UpdateComponent(config) => {
+                self.state.connections.set_config(config).await?;
+            }
             Command::SaveConfig(_) => {
                 self.state.save_config(&self.args.config)?;
             }
@@ -391,9 +332,8 @@ impl Core {
     async fn open_track(&mut self, path: String) -> Result<()> {
         let tracks_response = self
             .state
-            .track_recorder
-            .as_mut()
-            .expect("track recorder not running")
+            .connections
+            .track_recorder()
             .load(TrackLoadRequest { load_path: path })
             .await?;
         self.state.tracks = tracks_response.into_inner().tracks;
@@ -406,9 +346,8 @@ impl Core {
             tracks: self.state.tracks.clone(),
         };
         self.state
-            .track_recorder
-            .as_mut()
-            .expect("TrackRecorder not running")
+            .connections
+            .track_recorder()
             .save(save_request)
             .await?;
 
@@ -442,28 +381,5 @@ impl Core {
             };
         };
         Ok(())
-    }
-
-    async fn poll_connect(&self, addr: &str) -> Result<tonic::transport::Channel> {
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while std::time::Instant::now() < deadline {
-            let addr = addr.to_owned();
-            match tonic::transport::Endpoint::new(addr)?.connect().await {
-                Ok(conn) => return Ok(conn),
-                Err(_) => {}
-            }
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-        }
-        Err(anyhow::anyhow!("Could not connect to {}", addr))
-    }
-
-    async fn connect_component(&self, config: &ComponentConfig) -> Result<Vec<GrpcClient>> {
-        let mut clients = vec![];
-        let address = format!("http://{}", config.address);
-        let channel = self.poll_connect(&address).await?;
-        for service in &config.services {
-            clients.push(GrpcClient::new(channel.clone(), service)?);
-        }
-        Ok(clients)
     }
 }
