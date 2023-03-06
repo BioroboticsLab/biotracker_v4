@@ -1,4 +1,7 @@
-use super::app::{BioTrackerUIComponents, BioTrackerUIContext};
+use super::{
+    app::{BioTrackerUIComponents, BioTrackerUIContext},
+    component_config::ConfigJson,
+};
 use crate::biotracker::protocol::*;
 
 pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUIComponents) {
@@ -166,6 +169,23 @@ pub fn settings_window(
                 ui.separator();
                 ui.end_row();
                 annotation_settings(ui, components);
+
+                for component in ctx.experiment.components.iter_mut() {
+                    if component.id != "HungarianMatcher" {
+                        continue;
+                    }
+                    ui.heading(&component.id);
+                    ui.separator();
+                    ui.end_row();
+                    if ConfigJson::new()
+                        .show(ui, &mut component.config_json)
+                        .changed()
+                    {
+                        ctx.bt
+                            .command(Command::UpdateComponent(component.clone()))
+                            .unwrap();
+                    }
+                }
             });
         });
     ctx.experiment_setup_open = open;

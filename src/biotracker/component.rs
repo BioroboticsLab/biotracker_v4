@@ -21,7 +21,7 @@ impl ComponentConnections {
 
     pub async fn set_config(&mut self, config: ComponentConfig) -> Result<()> {
         for connection in self.connections.values_mut() {
-            if connection.config.id == config.id {
+            if connection.id == config.id {
                 connection.set_config(config).await?;
                 return Ok(());
             }
@@ -70,7 +70,7 @@ pub enum GrpcClient {
 pub struct ComponentConnection {
     pub service_type: ServiceType,
     pub client: GrpcClient,
-    pub config: ComponentConfig,
+    pub id: String,
 }
 
 impl ComponentConnection {
@@ -89,7 +89,7 @@ impl ComponentConnection {
         }?;
         let mut result = Self {
             service_type,
-            config: config.clone(),
+            id: config.id.clone(),
             client,
         };
         result.set_config(config.clone()).await?;

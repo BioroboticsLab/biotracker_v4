@@ -38,6 +38,7 @@ impl State {
                 tracking_area_corners: vec![],
             },
         };
+        let components = config.components.clone();
         Self {
             experiment: Experiment {
                 target_fps: 25.0,
@@ -47,6 +48,7 @@ impl State {
                 realtime_mode: true,
                 last_entities: Some(Entities { entities: vec![] }),
                 tracking_metrics: Some(TrackingMetrics::default()),
+                components,
                 ..Default::default()
             },
             config,
@@ -170,8 +172,19 @@ impl State {
         Ok(())
     }
 
+    pub fn update_component(&mut self, component: ComponentConfig) -> Result<()> {
+        for c in &mut self.experiment.components {
+            if c.id == component.id {
+                *c = component;
+                return Ok(());
+            }
+        }
+        Err(anyhow::anyhow!("Component not found"))
+    }
+
     pub fn save_config(&mut self, path: &str) -> Result<()> {
         self.config.arena = Some(self.arena_impl.arena.clone());
+        self.config.components = self.experiment.components.clone();
         self.config.save(path)?;
         Ok(())
     }

@@ -277,7 +277,8 @@ impl Core {
                 self.state.update_arena(arena)?;
             }
             Command::UpdateComponent(config) => {
-                self.state.connections.set_config(config).await?;
+                self.state.connections.set_config(config.clone()).await?;
+                self.state.update_component(config)?;
             }
             Command::SaveConfig(_) => {
                 self.state.save_config(&self.args.config)?;

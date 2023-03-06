@@ -3,6 +3,7 @@ pub mod annotator;
 pub mod app;
 pub mod camera_button;
 pub mod color;
+pub mod component_config;
 pub mod controller;
 pub mod entity_dropdown;
 pub mod entity_switcher;
