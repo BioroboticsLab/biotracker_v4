@@ -22,8 +22,10 @@ message Point {
 message Arena {
     uint32 width_cm = 3;
     uint32 height_cm = 4;
-    // corners of rectification rectangle in pixel space, in clockwise order
+    // corners of rectification area in pixel space, in clockwise order
     repeated Point rectification_corners = 5;
+    // corners of tracking area area in pixel space, in clockwise order
+    repeated Point tracking_area_corners = 6;
 }
 
 message EntityIDSwitch {

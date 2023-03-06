@@ -18,6 +18,9 @@ pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUICompo
     ui.label("Draw Rectification");
     ui.checkbox(&mut video_view.draw_rectification, "");
     ui.end_row();
+    ui.label("Draw Tracking Area");
+    ui.checkbox(&mut video_view.draw_tracking_area, "");
+    ui.end_row();
 }
 
 pub fn file_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {

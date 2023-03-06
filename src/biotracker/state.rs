@@ -1,3 +1,4 @@
+use super::arena::ArenaImpl;
 use super::metric::DurationMetric;
 use super::{protocol::*, BiotrackerConfig, VideoDecoder, VideoEncoder};
 use anyhow::Result;
@@ -16,7 +17,7 @@ pub struct State {
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
     pub metrics: Metrics,
-    pub rectification_transform: cv::prelude::Mat,
+    pub arena_impl: ArenaImpl,
     entity_counter: u32,
 }
 
@@ -29,11 +30,10 @@ pub struct Metrics {
 impl State {
     pub fn new(config: BiotrackerConfig) -> Self {
         let arena = config.arena.clone();
-        let rectification_transform = arena.rectification_transform().unwrap();
         Self {
             experiment: Experiment {
                 target_fps: 25.0,
-                arena: Some(arena),
+                arena: Some(arena.clone()),
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
                 realtime_mode: true,
@@ -42,7 +42,7 @@ impl State {
                 ..Default::default()
             },
             config,
-            rectification_transform,
+            arena_impl: ArenaImpl::new(arena).unwrap(),
             ..Default::default()
         }
     }
@@ -157,7 +157,7 @@ impl State {
     }
 
     pub fn update_arena(&mut self, arena: Arena) -> Result<()> {
-        self.rectification_transform = arena.rectification_transform()?;
+        self.arena_impl = ArenaImpl::new(arena.clone())?;
         self.experiment.arena = Some(arena);
         Ok(())
     }

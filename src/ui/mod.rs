@@ -8,8 +8,8 @@ pub mod entity_dropdown;
 pub mod entity_switcher;
 pub mod metrics;
 pub mod offscreen_renderer;
+pub mod polygon;
 pub mod record_button;
-pub mod rectification;
 pub mod settings;
 pub mod texture;
 

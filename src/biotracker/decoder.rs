@@ -70,7 +70,7 @@ impl Playback {
         ))
     }
     #[cfg(not(feature = "pylon"))]
-    fn open_basler(_camera_id: String) -> Result<(Playback, VideoInfo)> {
+    fn open_basler(_camera_id: String, _: f64) -> Result<(Playback, VideoInfo)> {
         panic!("Pylon feature disabled");
     }
 

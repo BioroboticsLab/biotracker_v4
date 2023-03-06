@@ -12,6 +12,7 @@ message Feature {
   repeated SkeletonNode nodes = 1;
   Pose pose = 2;
   float score = 3;
+  bool out_of_bounds = 4;
 }
 
 message Features {

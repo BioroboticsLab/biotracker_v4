@@ -51,12 +51,18 @@ impl MatcherService {
     pub fn hungarian_matching(
         frame_number: u32,
         last_entities: Entities,
-        mut features_msg: Features,
+        features_msg: Features,
     ) -> Entities {
-        let features = &mut features_msg.features;
+        // Remove out-of-bound features
+        let mut features: Vec<&Feature> = features_msg
+            .features
+            .iter()
+            .filter(|f| f.out_of_bounds == false)
+            .collect();
         // Remove lowest scoring features, if there is more then we expect
         let mut last_entities = last_entities.entities;
         let entity_count = last_entities.len();
+
         if features.len() > entity_count {
             // sort by score in descending order
             features.sort_by(|a, b| {

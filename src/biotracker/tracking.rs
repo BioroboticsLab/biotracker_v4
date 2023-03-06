@@ -1,25 +1,24 @@
-use super::{arena::rectify_features, protocol::*, State};
+use super::{arena::ArenaImpl, protocol::*, State};
 use anyhow::Result;
 
 async fn tracking_task(
     image: Image,
     mut detector: FeatureDetectorClient<tonic::transport::Channel>,
     mut matcher: MatcherClient<tonic::transport::Channel>,
-    arena: Option<Arena>,
-    rectification_transform: cv::prelude::Mat,
+    arena: ArenaImpl,
     last_entities: Entities,
 ) -> Result<(u32, Features, Entities)> {
     let frame_number = image.frame_number;
     let detector_request = DetectorRequest {
         image: Some(image),
-        arena,
+        arena: Some(arena.arena.clone()),
     };
     let mut features = detector
         .detect_features(detector_request)
         .await?
         .into_inner();
 
-    rectify_features(&mut features, &rectification_transform)?;
+    arena.features_to_poses(&mut features)?;
 
     let matcher_request = MatcherRequest {
         features: Some(features.clone()),
@@ -79,19 +78,10 @@ pub fn start_tracking_task(
         }
     }
 
-    let arena = state.experiment.arena.clone();
-    let rectification_transform = state.rectification_transform.clone();
+    let arena = state.arena_impl.clone();
     let tracking_tx = tracking_tx.clone();
     *task_handle = Some(tokio::spawn(async move {
-        let result = tracking_task(
-            image,
-            detector,
-            matcher,
-            arena,
-            rectification_transform,
-            tracking_entities,
-        )
-        .await;
+        let result = tracking_task(image, detector, matcher, arena, tracking_entities).await;
         tracking_tx.send(result).await.unwrap();
     }));
 }

@@ -1,9 +1,9 @@
 use super::{
     annotator::Annotator, app::BioTrackerUIContext, offscreen_renderer::OffscreenRenderer,
-    rectification::Rectification, texture::Texture,
+    polygon::Polygon, texture::Texture,
 };
 use crate::biotracker::{
-    protocol::{Feature, Image, SkeletonDescriptor},
+    protocol::{Arena, Command, Feature, Image, SkeletonDescriptor},
     DoubleBuffer,
 };
 use cv::prelude::*;
@@ -15,13 +15,15 @@ pub struct AnnotatedVideo {
     pub draw_node_labels: bool,
     pub draw_ids: bool,
     pub draw_rectification: bool,
+    pub draw_tracking_area: bool,
     image_updated: bool,
     render_texture_id: egui::TextureId,
     image_texture_id: egui::TextureId,
     scale: f32,
     image_texture: Option<Texture>,
     annotator: Annotator,
-    rectification: Rectification,
+    rectification: Polygon,
+    tracking_area: Polygon,
     offscreen_renderer: OffscreenRenderer,
     image_buffers: DoubleBuffer,
 }
@@ -36,13 +38,15 @@ impl AnnotatedVideo {
             draw_node_labels: false,
             draw_ids: true,
             draw_rectification: true,
+            draw_tracking_area: true,
             image_updated: false,
             render_texture_id: offscreen_texture_id,
             image_texture_id: egui::TextureId::default(),
             scale: 1.0,
             image_texture: None,
             annotator: Annotator::default(),
-            rectification: Rectification::default(),
+            rectification: Polygon::new(),
+            tracking_area: Polygon::new(),
             offscreen_renderer,
             image_buffers: DoubleBuffer::new(),
         }
@@ -270,13 +274,11 @@ impl AnnotatedVideo {
         if let Some(features) = &ctx.experiment.last_features {
             if self.draw_features {
                 for feature in &features.features {
-                    self.paint_feature(
-                        None,
-                        &painter,
-                        feature,
-                        &features.skeleton,
-                        egui::Color32::GREEN,
-                    );
+                    let color = match feature.out_of_bounds {
+                        true => egui::Color32::RED,
+                        false => egui::Color32::GREEN,
+                    };
+                    self.paint_feature(None, &painter, feature, &features.skeleton, color);
                 }
             }
             skeleton = features.skeleton.clone();
@@ -293,8 +295,41 @@ impl AnnotatedVideo {
         }
 
         self.annotator.show(&response, &painter, ctx);
-        if self.draw_rectification {
-            self.rectification.show(ui, &response, &painter, ctx);
+        if let Some(arena) = ctx.experiment.arena.as_ref() {
+            if self.draw_rectification {
+                if let Some(changed_corners) = self.rectification.show(
+                    "rectification_area".into(),
+                    ui,
+                    &response,
+                    &painter,
+                    &arena.rectification_corners,
+                    &egui::Stroke::new(4.0, egui::Color32::RED.linear_multiply(0.25)),
+                ) {
+                    ctx.bt
+                        .command(Command::UpdateArena(Arena {
+                            rectification_corners: changed_corners,
+                            ..ctx.experiment.arena.clone().expect("Arena not set")
+                        }))
+                        .unwrap();
+                }
+            }
+            if self.draw_tracking_area {
+                if let Some(changed_corners) = self.tracking_area.show(
+                    "tracking_area".into(),
+                    ui,
+                    &response,
+                    &painter,
+                    &arena.tracking_area_corners,
+                    &egui::Stroke::new(4.0, egui::Color32::BLUE.linear_multiply(0.25)),
+                ) {
+                    ctx.bt
+                        .command(Command::UpdateArena(Arena {
+                            tracking_area_corners: changed_corners,
+                            ..ctx.experiment.arena.clone().expect("Arena not set")
+                        }))
+                        .unwrap();
+                }
+            }
         }
     }
 }
