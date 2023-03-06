@@ -1,6 +1,7 @@
 use super::{
-    protocol::*, tracking::start_tracking_task, ChannelRequest, CommandLineArguments,
-    ComponentConfig, MatcherService, PythonProcess, RobofishCommander, Service, State,
+    protocol::*, tracking::start_tracking_task, BiotrackerConfig, ChannelRequest,
+    CommandLineArguments, ComponentConfig, MatcherService, PythonProcess, RobofishCommander,
+    Service, State,
 };
 use anyhow::Result;
 use bio_tracker_server::BioTrackerServer;
@@ -48,8 +49,7 @@ impl GrpcClient {
 impl Core {
     pub async fn new(args: &CommandLineArguments) -> Result<Self> {
         let args = Arc::new(args.clone());
-        let config_json = std::fs::read(args.config.clone())?;
-        let config = serde_json::from_slice(config_json.as_slice())?;
+        let config = BiotrackerConfig::load(&args.config)?;
         let state = State::new(config);
         let (command_tx, command_rx) = channel(1);
         let (state_tx, state_rx) = channel(1);
@@ -337,6 +337,9 @@ impl Core {
             }
             Command::UpdateArena(arena) => {
                 self.state.update_arena(arena)?;
+            }
+            Command::SaveConfig(_) => {
+                self.state.save_config(&self.args.config)?;
             }
             Command::Shutdown(_) => {}
         }

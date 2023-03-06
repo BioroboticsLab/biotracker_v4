@@ -49,6 +49,7 @@ message BioTrackerCommand {
         uint32 remove_entity = 6;
         EntityIDSwitch switch_entities = 10;
         Arena update_arena = 13;
+        Empty save_config = 14;
         Empty shutdown = 8;
     }
 }

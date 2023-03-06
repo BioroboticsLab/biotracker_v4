@@ -161,4 +161,10 @@ impl State {
         self.experiment.arena = Some(arena);
         Ok(())
     }
+
+    pub fn save_config(&mut self, path: &str) -> Result<()> {
+        self.config.arena = self.arena_impl.arena.clone();
+        self.config.save(path)?;
+        Ok(())
+    }
 }

@@ -177,6 +177,17 @@ impl eframe::App for BioTrackerUI {
                 let settings_icon = "⛭";
                 ui.toggle_value(&mut self.context.experiment_setup_open, settings_icon)
                     .on_hover_text("Open Settings");
+                let save_icon = "💾";
+                if ui
+                    .button(save_icon)
+                    .on_hover_text("Save Configuration")
+                    .clicked()
+                {
+                    self.context
+                        .bt
+                        .command(Command::SaveConfig(Empty {}))
+                        .unwrap();
+                }
             });
         });
 

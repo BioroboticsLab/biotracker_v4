@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use clap::Parser;
 
 /// Distributed framework for animal tracking
@@ -17,7 +15,7 @@ pub struct CommandLineArguments {
     pub realtime: Option<bool>,
     /// Path to configuration json
     #[arg(long)]
-    pub config: PathBuf,
+    pub config: String,
     /// Port for biotracker core
     #[arg(long, default_value_t = 27342)]
     pub port: u32,
