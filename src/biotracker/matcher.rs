@@ -8,7 +8,7 @@ use tonic::{Request, Response, Status};
 #[derive(Deserialize, Default, Clone)]
 pub struct MatcherConfig {
     ignore_nan: bool,
-    _ignore_large_jumps: bool,
+    ignore_out_of_bounds: bool,
 }
 
 #[derive(Default)]
@@ -83,20 +83,21 @@ impl MatcherService {
             .features
             .iter()
             .filter(|f| {
-                if f.out_of_bounds {
+                let mut result = true;
+                if config.ignore_out_of_bounds && f.out_of_bounds {
                     oob_count += 1;
-                    return false;
+                    result = false;
                 }
                 if !config.ignore_nan {
-                    return true;
+                    return result;
                 }
                 for node in f.nodes.iter() {
                     if node.x.is_nan() || node.y.is_nan() {
                         nan_count += 1;
-                        return false;
+                        result = false;
                     }
                 }
-                return true;
+                return result;
             })
             .collect();
         if nan_count > 0 || oob_count > 0 {
