@@ -119,7 +119,15 @@ impl BioTrackerUI {
     }
 
     fn update_context(&mut self, frame: &mut eframe::Frame) {
-        self.context.experiment = self.context.bt.get_state().unwrap();
+        match self.context.bt.get_state() {
+            Ok(state) => {
+                self.context.experiment = state;
+                self.update_image(frame);
+            }
+            Err(e) => {
+                log::error!("Failed to get state: {}", e);
+            }
+        }
         self.update_image(frame);
     }
 
@@ -158,7 +166,12 @@ impl BioTrackerUI {
 impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.update_context(frame);
-        self.handle_shortcuts(ctx).unwrap();
+        match self.handle_shortcuts(ctx) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Shortcut failed: {}", e);
+            }
+        }
 
         // Top Toolbar
         egui::TopBottomPanel::top("Toolbar").show(ctx, |ui| {
@@ -183,10 +196,7 @@ impl eframe::App for BioTrackerUI {
                     .on_hover_text("Save Configuration")
                     .clicked()
                 {
-                    self.context
-                        .bt
-                        .command(Command::SaveConfig(Empty {}))
-                        .unwrap();
+                    self.context.bt.check_command(Command::SaveConfig(Empty {}));
                 }
             });
         });
@@ -200,18 +210,16 @@ impl eframe::App for BioTrackerUI {
                     match PlaybackState::from_i32(self.context.experiment.playback_state).unwrap() {
                         PlaybackState::Playing => {
                             if ui.add(egui::Button::new("⏸")).clicked() {
-                                self.context
-                                    .bt
-                                    .command(Command::PlaybackState(PlaybackState::Paused as i32))
-                                    .unwrap();
+                                self.context.bt.check_command(Command::PlaybackState(
+                                    PlaybackState::Paused as i32,
+                                ));
                             }
                         }
                         _ => {
                             if ui.add(egui::Button::new("▶")).clicked() {
-                                self.context
-                                    .bt
-                                    .command(Command::PlaybackState(PlaybackState::Playing as i32))
-                                    .unwrap();
+                                self.context.bt.check_command(Command::PlaybackState(
+                                    PlaybackState::Playing as i32,
+                                ));
                             }
                         }
                     };
@@ -228,10 +236,7 @@ impl eframe::App for BioTrackerUI {
                             egui::Slider::new(current_frame, 0..=frame_count).show_value(false),
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
-                            self.context
-                                .bt
-                                .command(Command::Seek(*current_frame))
-                                .unwrap();
+                            self.context.bt.check_command(Command::Seek(*current_frame));
                         }
                         ui.label(framenumber_to_hhmmss(frame_count, video_info.fps));
                     }
@@ -262,10 +267,7 @@ impl eframe::App for BioTrackerUI {
     }
 
     fn on_exit(&mut self) {
-        self.context
-            .bt
-            .command(Command::Shutdown(Empty {}))
-            .unwrap();
+        self.context.bt.check_command(Command::Shutdown(Empty {}));
         match self.core_thread.take().unwrap().join() {
             Ok(_) => {}
             Err(e) => {

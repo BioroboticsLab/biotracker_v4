@@ -73,7 +73,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         let difference = entity_count as i32 - ctx.experiment.entity_ids.len() as i32;
         if difference > 0 {
             for _ in 0..difference {
-                ctx.bt.command(Command::AddEntity(Empty {})).unwrap();
+                ctx.bt.check_command(Command::AddEntity(Empty {}));
             }
         } else {
             for i in 0..difference.abs() {
@@ -81,7 +81,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
                     break;
                 }
                 let id = ctx.experiment.entity_ids[i as usize];
-                ctx.bt.command(Command::RemoveEntity(id)).unwrap();
+                ctx.bt.check_command(Command::RemoveEntity(id));
             }
         }
     }
@@ -89,7 +89,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     let mut fps = ctx.experiment.target_fps;
     ui.add(egui::Label::new("Target FPS")).changed();
     if ui.add(egui::DragValue::new(&mut fps)).changed() {
-        ctx.bt.command(Command::TargetFps(fps as f32)).unwrap();
+        ctx.bt.check_command(Command::TargetFps(fps as f32));
     }
 
     if ui
@@ -100,8 +100,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         .changed()
     {
         ctx.bt
-            .command(Command::RealtimeMode(ctx.experiment.realtime_mode))
-            .unwrap();
+            .check_command(Command::RealtimeMode(ctx.experiment.realtime_mode));
     }
     ui.end_row();
     ui.end_row();
@@ -135,7 +134,7 @@ pub fn arena_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     ui.end_row();
 
     if send_update {
-        ctx.bt.command(Command::UpdateArena(arena.clone())).unwrap();
+        ctx.bt.check_command(Command::UpdateArena(arena.clone()));
     }
 }
 

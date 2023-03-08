@@ -33,6 +33,15 @@ impl BioTrackerController {
         Ok(response?.into_inner())
     }
 
+    pub fn check_command(&mut self, command: Command) {
+        match self.command(command) {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Command failed: {}", e);
+            }
+        }
+    }
+
     pub fn command(&mut self, command: Command) -> Result<Empty> {
         let BioTrackerController { client, rt } = self;
         let response = rt.block_on(async move {

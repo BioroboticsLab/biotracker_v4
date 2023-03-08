@@ -216,7 +216,12 @@ impl AnnotatedVideo {
                 .offscreen_renderer
                 .texture_to_image(ctx.current_frame_number)
                 .unwrap();
-            ctx.bt.add_image(image).unwrap();
+            match ctx.bt.add_image(image) {
+                Ok(_) => {}
+                Err(e) => {
+                    log::error!("Failed to send image: {}", e);
+                }
+            }
         }
     }
 
@@ -305,12 +310,10 @@ impl AnnotatedVideo {
                     &arena.rectification_corners,
                     &egui::Stroke::new(4.0, egui::Color32::RED.linear_multiply(0.25)),
                 ) {
-                    ctx.bt
-                        .command(Command::UpdateArena(Arena {
-                            rectification_corners: changed_corners,
-                            ..ctx.experiment.arena.clone().expect("Arena not set")
-                        }))
-                        .unwrap();
+                    ctx.bt.check_command(Command::UpdateArena(Arena {
+                        rectification_corners: changed_corners,
+                        ..ctx.experiment.arena.clone().expect("Arena not set")
+                    }));
                 }
             }
             if self.draw_tracking_area {
@@ -322,12 +325,10 @@ impl AnnotatedVideo {
                     &arena.tracking_area_corners,
                     &egui::Stroke::new(4.0, egui::Color32::BLUE.linear_multiply(0.25)),
                 ) {
-                    ctx.bt
-                        .command(Command::UpdateArena(Arena {
-                            tracking_area_corners: changed_corners,
-                            ..ctx.experiment.arena.clone().expect("Arena not set")
-                        }))
-                        .unwrap();
+                    ctx.bt.check_command(Command::UpdateArena(Arena {
+                        tracking_area_corners: changed_corners,
+                        ..ctx.experiment.arena.clone().expect("Arena not set")
+                    }));
                 }
             }
         }
