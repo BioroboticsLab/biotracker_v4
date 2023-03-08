@@ -23,7 +23,6 @@ pub use decoder::VideoDecoder;
 pub use encoder::VideoEncoder;
 pub use matcher::MatcherService;
 pub use protocol::*;
-pub use python_process::PythonProcess;
 pub use robofish_commander::RobofishCommander;
 pub use service::Service;
 pub use shared_buffer::DoubleBuffer;

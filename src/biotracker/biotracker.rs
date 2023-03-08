@@ -1,7 +1,7 @@
 use super::{
-    component::ComponentConnections, protocol::*, tracking::start_tracking_task, BiotrackerConfig,
-    ChannelRequest, CommandLineArguments, ComponentConfig, MatcherService, PythonProcess,
-    RobofishCommander, Service, State,
+    component::ComponentConnections, protocol::*, python_process::ProcessManager,
+    tracking::start_tracking_task, BiotrackerConfig, ChannelRequest, CommandLineArguments,
+    ComponentConfig, MatcherService, RobofishCommander, Service, State,
 };
 use anyhow::Result;
 use bio_tracker_server::BioTrackerServer;
@@ -17,7 +17,7 @@ pub struct Core {
     args: Arc<CommandLineArguments>,
     command_rx: Receiver<ChannelRequest<Command, Result<Empty>>>,
     image_rx: Receiver<ChannelRequest<Image, Result<Empty>>>,
-    python_processes: Vec<PythonProcess>,
+    process_manager: ProcessManager,
     state: State,
     state_rx: Receiver<ChannelRequest<(), Experiment>>,
     robofish_commander_bridge: RobofishCommander,
@@ -55,7 +55,7 @@ impl Core {
             args,
             command_rx,
             image_rx,
-            python_processes: vec![],
+            process_manager: ProcessManager::new(),
             state,
             state_rx,
         })
@@ -107,12 +107,14 @@ impl Core {
                 task.abort();
             }
         }
-        self.python_processes.clear();
+        self.process_manager.stop().await?;
         Ok(Empty {})
     }
 
     pub async fn run(mut self) -> Result<()> {
         self.init().await?;
+        self.process_manager.run();
+
         let mut fps = self.state.experiment.target_fps;
         let mut fps_interval =
             tokio::time::interval(std::time::Duration::from_secs_f64(1.0 / fps as f64));
@@ -358,8 +360,9 @@ impl Core {
     async fn start_component(&mut self, config: ComponentConfig) -> Result<()> {
         let address = config.address.to_owned();
         if let Some(python_config) = &config.python_config {
-            let process = PythonProcess::new(&config, python_config)?;
-            self.python_processes.push(process);
+            self.process_manager
+                .start_python_process(&config, python_config)
+                .await?;
         } else {
             match config.id.as_str() {
                 "HungarianMatcher" => {

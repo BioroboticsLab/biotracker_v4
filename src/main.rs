@@ -1,4 +1,4 @@
-use biotracker::{logger::LOGGER, CommandLineArguments, Core};
+use biotracker::{logger::Logger, CommandLineArguments, Core};
 use clap::Parser;
 use std::sync::Arc;
 use ui::BioTrackerUI;
@@ -11,7 +11,11 @@ fn main() {
     let args = CommandLineArguments::parse();
     cv::core::set_num_threads(args.cv_worker_threads as i32).unwrap();
 
-    log::set_logger(&LOGGER)
+    // We need to initialize the logger at runtime. Instead of calling set_boxed_logger, we
+    // manually create a static reference. This way, we can keep it and pass it to the UI.
+    let logger = Box::new(Logger::new());
+    let logger_static_ref = Box::leak(logger);
+    log::set_logger(logger_static_ref)
         .map(|()| log::set_max_level(log::LevelFilter::Warn))
         .unwrap();
 
