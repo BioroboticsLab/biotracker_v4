@@ -7,6 +7,7 @@ pub mod component_config;
 pub mod controller;
 pub mod entity_dropdown;
 pub mod entity_switcher;
+pub mod log;
 pub mod metrics;
 pub mod offscreen_renderer;
 pub mod polygon;

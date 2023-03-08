@@ -225,7 +225,7 @@ impl AnnotatedVideo {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
+    pub fn show(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) -> egui::Response {
         self.update_scale(ui);
         let response = self.show_onscreen(ui);
         let events = ui.input(|i| i.raw.events.clone());
@@ -241,6 +241,7 @@ impl AnnotatedVideo {
         });
         self.offscreen_renderer
             .render(full_output, self.image_updated);
+        response
     }
 
     fn show_onscreen(&mut self, ui: &mut egui::Ui) -> egui::Response {
@@ -249,6 +250,7 @@ impl AnnotatedVideo {
         let width = ui.available_width() * self.scale;
         let height = width * aspect_ratio;
         egui::ScrollArea::both()
+            .id_source("video_area")
             .show(ui, |ui| {
                 ui.add(egui::Image::new(
                     self.render_texture_id,

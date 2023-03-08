@@ -102,7 +102,8 @@ impl MatcherService {
             .collect();
         if nan_count > 0 || oob_count > 0 {
             log::warn!(
-                "Removed {} features containing NaN values and {} out-of-bound features",
+                "Frame {} Removed {} features containing NaN values and {} out-of-bound features",
+                frame_number,
                 nan_count,
                 oob_count
             );

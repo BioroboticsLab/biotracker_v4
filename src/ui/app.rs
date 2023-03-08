@@ -5,12 +5,13 @@ use super::{
     color::{Palette, ALPHABET},
     controller::BioTrackerController,
     entity_switcher::EntitySwitcher,
+    log::LogView,
     metrics::MetricsPlot,
     record_button::RecordButton,
     settings::{file_open_buttons, open_video, settings_window},
 };
 use crate::{
-    biotracker::{protocol::*, CommandLineArguments},
+    biotracker::{logger::Logger, protocol::*, CommandLineArguments},
     util::framenumber_to_hhmmss,
 };
 use anyhow::Result;
@@ -42,6 +43,7 @@ pub struct BioTrackerUIComponents {
     pub record_button: RecordButton,
     pub camera_button: CameraButton,
     pub metrics_plot: MetricsPlot,
+    pub log_view: LogView,
 }
 
 pub struct BioTrackerUI {
@@ -55,6 +57,7 @@ impl BioTrackerUI {
         cc: &eframe::CreationContext,
         rt: Arc<tokio::runtime::Runtime>,
         core_thread: JoinHandle<()>,
+        logger: &'static Logger,
         args: CommandLineArguments,
     ) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
@@ -92,6 +95,7 @@ impl BioTrackerUI {
                 record_button: RecordButton::default(),
                 camera_button: CameraButton::new(),
                 metrics_plot: MetricsPlot::new(),
+                log_view: LogView::new(logger),
             },
             core_thread: Some(core_thread),
         })
@@ -166,6 +170,7 @@ impl BioTrackerUI {
 impl eframe::App for BioTrackerUI {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.update_context(frame);
+
         match self.handle_shortcuts(ctx) {
             Ok(_) => {}
             Err(e) => {
@@ -250,13 +255,23 @@ impl eframe::App for BioTrackerUI {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             settings_window(ui, &mut self.context, &mut self.components);
-            // Video view
-            self.components.video_view.show(ui, &mut self.context);
+            // Windows
             self.components.entity_switcher.show(ctx, &mut self.context);
-            // Metrics view
-            if self.components.metrics_plot.open {
-                self.components.metrics_plot.show(ui, &mut self.context);
-            }
+            self.components.metrics_plot.show(ui, &mut self.context);
+
+            let (width, height) = (ui.available_width(), ui.available_height() * 0.95);
+            let video_height = height * 0.75;
+            let log_height = height - video_height;
+
+            // Video view
+            ui.add_sized(egui::vec2(width, video_height), |ui: &mut egui::Ui| {
+                self.components.video_view.show(ui, &mut self.context)
+            });
+            ui.separator();
+            // Log view
+            ui.add_sized(egui::vec2(width, log_height), |ui: &mut egui::Ui| {
+                self.components.log_view.show(ui)
+            })
         });
 
         ctx.request_repaint();

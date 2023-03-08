@@ -16,30 +16,32 @@ impl MetricsPlot {
     }
 
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
-        egui::Window::new("Tracking Metrics").show(ui.ctx(), |ui| {
-            let metrics = ctx.experiment.tracking_metrics.as_ref().unwrap();
-            ui.label(format!(
-                "Tracking FPS: {:.1}",
-                1.0 / metrics.tracking_frame_time
-            ));
-            ui.label(format!(
-                "Playback FPS: {:.1}",
-                1.0 / metrics.playback_frame_time
-            ));
-            ui.label(format!(
-                "UI FPS: {}",
-                (1.0 / self.ui_frame_time.update()) as u32
-            ));
-            ui.label(format!("Features: {}", metrics.detected_features));
-            ui.label(format!(
-                "Encoder dropped frames: {}",
-                metrics.encoder_dropped_frames
-            ));
-            ui.label(format!(
-                "Playback dropped frames: {}",
-                metrics.playback_dropped_frames
-            ));
-        });
+        if self.open {
+            egui::Window::new("Tracking Metrics").show(ui.ctx(), |ui| {
+                let metrics = ctx.experiment.tracking_metrics.as_ref().unwrap();
+                ui.label(format!(
+                    "Tracking FPS: {:.1}",
+                    1.0 / metrics.tracking_frame_time
+                ));
+                ui.label(format!(
+                    "Playback FPS: {:.1}",
+                    1.0 / metrics.playback_frame_time
+                ));
+                ui.label(format!(
+                    "UI FPS: {}",
+                    (1.0 / self.ui_frame_time.update()) as u32
+                ));
+                ui.label(format!("Features: {}", metrics.detected_features));
+                ui.label(format!(
+                    "Encoder dropped frames: {}",
+                    metrics.encoder_dropped_frames
+                ));
+                ui.label(format!(
+                    "Playback dropped frames: {}",
+                    metrics.playback_dropped_frames
+                ));
+            });
+        }
     }
 
     pub fn show_button(&mut self, ui: &mut egui::Ui) {

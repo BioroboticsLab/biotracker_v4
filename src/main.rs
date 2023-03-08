@@ -56,7 +56,11 @@ fn main() {
             },
             ..Default::default()
         },
-        Box::new(|cc| Box::new(BioTrackerUI::new(cc, rt_clone, core_thread, args_copy).unwrap())),
+        Box::new(|cc| {
+            Box::new(
+                BioTrackerUI::new(cc, rt_clone, core_thread, logger_static_ref, args_copy).unwrap(),
+            )
+        }),
     )
     .unwrap();
 }
