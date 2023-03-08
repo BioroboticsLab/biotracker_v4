@@ -56,7 +56,7 @@ impl AnnotatedVideo {
         let bgr_image = match self.image_buffers.get(image) {
             Ok(img) => img,
             Err(e) => {
-                eprintln!("Failed to open shared image: {}", e);
+                log::error!("Failed to open shared image: {}", e);
                 return;
             }
         };

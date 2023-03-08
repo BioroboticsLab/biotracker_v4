@@ -28,6 +28,7 @@ cv = { package= "opencv", version="0.75", default-features = false, features = [
 pylon-cxx = { version = "0.3.4", optional = true }
 bytemuck = "1.13.0"
 chrono = "0.4.23"
+log = "0.4.17"
 
 [build-dependencies]
 tonic-build = "0.8.4"

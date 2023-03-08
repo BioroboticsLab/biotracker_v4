@@ -101,9 +101,10 @@ impl MatcherService {
             })
             .collect();
         if nan_count > 0 || oob_count > 0 {
-            eprintln!(
+            log::warn!(
                 "Removed {} features containing NaN values and {} out-of-bound features",
-                nan_count, oob_count
+                nan_count,
+                oob_count
             );
         }
 

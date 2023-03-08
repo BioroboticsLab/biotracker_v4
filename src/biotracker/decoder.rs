@@ -143,7 +143,7 @@ impl VideoSampler for PylonCamera<'_> {
             }
 
             if i > 0 {
-                eprintln!("Warning: grabbing image took {} retries", i);
+                log::warn!("Warning: grabbing image took {} retries", i);
             }
 
             let pylon_buffer = self.grab_result.buffer()?;

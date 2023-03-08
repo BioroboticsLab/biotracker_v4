@@ -215,7 +215,7 @@ pub fn open_video(ctx: &mut BioTrackerUIContext) {
         match ctx.bt.command(Command::OpenVideo(path.to_owned())) {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("Failed to open video: {}", e);
+                log::error!("Failed to open video: {}", e);
             }
         }
     }

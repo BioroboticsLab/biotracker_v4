@@ -1,4 +1,4 @@
-use biotracker::{CommandLineArguments, Core};
+use biotracker::{logger::LOGGER, CommandLineArguments, Core};
 use clap::Parser;
 use std::sync::Arc;
 use ui::BioTrackerUI;
@@ -10,6 +10,10 @@ mod util;
 fn main() {
     let args = CommandLineArguments::parse();
     cv::core::set_num_threads(args.cv_worker_threads as i32).unwrap();
+
+    log::set_logger(&LOGGER)
+        .map(|()| log::set_max_level(log::LevelFilter::Warn))
+        .unwrap();
 
     let args_copy = args.clone();
 

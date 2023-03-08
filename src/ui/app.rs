@@ -269,7 +269,7 @@ impl eframe::App for BioTrackerUI {
         match self.core_thread.take().unwrap().join() {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("BioTracker core exited with error: {:?}", e);
+                log::error!("BioTracker core exited with error: {:?}", e);
             }
         }
     }

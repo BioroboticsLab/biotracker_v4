@@ -46,7 +46,7 @@ impl Core {
             {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("Failed to start BioTracker Service: {}", e);
+                    log::error!("Failed to start BioTracker Service: {}", e);
                 }
             };
         });
@@ -72,7 +72,7 @@ impl Core {
             match self.state.open_video(video.to_owned()) {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("Failed to open video: {}", e);
+                    log::error!("Failed to open video: {}", e);
                 }
             }
         }
@@ -81,7 +81,7 @@ impl Core {
             match self.state.seek(seek.to_owned()) {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("Failed to seek: {}", e);
+                    log::error!("Failed to seek: {}", e);
                 }
             }
         }
@@ -161,7 +161,7 @@ impl Core {
                     if self.state.experiment.playback_state == PlaybackState::Playing as i32 &&
                         (self.state.experiment.realtime_mode || tracking_task.is_none()) {
                         if decoder_task.is_some() {
-                            eprintln!("VideoDecoder too slow, dropping frame");
+                            log::warn!("VideoDecoder too slow, dropping frame");
                             self.state
                                 .experiment
                                 .tracking_metrics
@@ -194,7 +194,7 @@ impl Core {
                             self.start_encoder_task(&mut encoder_task, &image);
                         }
                         Err(e) => {
-                            eprintln!("Error while decoding image: {}", e);
+                            log::error!("Error while decoding image: {}", e);
                             self.state.close_decoder();
                         }
                     }
@@ -223,12 +223,12 @@ impl Core {
                             }
                         }
                         Err(e) => {
-                            eprintln!("Error while tracking: {}", e);
+                            log::warn!("Tracking failed: {}", e);
                         }
                     }
                 }
                 _ = self.robofish_commander_bridge.accept() => {
-                    eprintln!("Robofish commander connected");
+                    log::info!("Robofish commander connected");
                 }
             }
         }
@@ -373,7 +373,7 @@ impl Core {
                         {
                             Ok(_) => {}
                             Err(e) => {
-                                eprintln!("HungarianMatcher failed: {}", e);
+                                log::warn!("HungarianMatcher failed: {}", e);
                             }
                         };
                     });

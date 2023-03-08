@@ -68,7 +68,7 @@ impl RobofishCommander {
         }
 
         for addr in drop_connections {
-            eprintln!("Lost connection to Robofish Commander at {}", addr);
+            log::warn!("Lost connection to Robofish Commander at {}", addr);
             self.streams.remove(&addr);
         }
         Ok(())

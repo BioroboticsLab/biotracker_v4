@@ -34,7 +34,7 @@ impl CameraButton {
                                     match ctx.bt.command(Command::OpenVideo(camera.to_owned())) {
                                         Ok(_) => self.dialog_open = false,
                                         Err(e) => {
-                                            eprintln!("Failed to open video: {}", e);
+                                            log::error!("Failed to open video: {}", e);
                                         }
                                     }
                                 }
