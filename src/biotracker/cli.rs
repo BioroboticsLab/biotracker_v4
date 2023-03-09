@@ -28,4 +28,7 @@ pub struct CommandLineArguments {
     /// Number of OpenCV worker threads
     #[arg(long, default_value_t = 4)]
     pub cv_worker_threads: u32,
+    /// Path to robofish track file
+    #[arg(long)]
+    pub track: Option<String>,
 }

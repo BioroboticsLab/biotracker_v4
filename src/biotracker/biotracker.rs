@@ -2,6 +2,7 @@ use super::{
     protocol::*, tracking::start_tracking_task, BiotrackerConfig, ChannelRequest,
     CommandLineArguments, RobofishCommander, Service, State,
 };
+use crate::log_error;
 use anyhow::{Context, Result};
 use bio_tracker_server::BioTrackerServer;
 use std::sync::Arc;
@@ -62,21 +63,11 @@ impl Core {
         self.state.connections.start_components(components).await?;
 
         if let Some(video) = &self.args.video {
-            match self.state.open_video(video.to_owned()) {
-                Ok(_) => {}
-                Err(e) => {
-                    log::error!("Failed to open video: {}", e);
-                }
-            }
+            log_error!(self.state.open_video(video.to_owned()));
         }
 
         if let Some(seek) = &self.args.seek {
-            match self.state.seek(seek.to_owned()) {
-                Ok(_) => {}
-                Err(e) => {
-                    log::error!("Failed to seek: {}", e);
-                }
-            }
+            log_error!(self.state.seek(seek.to_owned()));
         }
 
         if let Some(count) = &self.args.entity_count {
@@ -91,7 +82,7 @@ impl Core {
         Ok(())
     }
 
-    async fn finish(&mut self, tasks: &[&Option<JoinHandle<()>>]) -> Result<Empty> {
+    pub async fn finish(&mut self, tasks: &[&Option<JoinHandle<()>>]) -> Result<Empty> {
         if self.state.experiment.recording_state == RecordingState::Recording as i32 {
             self.finish_recording().await?;
         }
@@ -104,12 +95,11 @@ impl Core {
         Ok(Empty {})
     }
 
-    pub async fn run(mut self) -> Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         match self.init().await {
             Ok(_) => {}
             Err(e) => {
                 log::error!("Failed to initialize: {}", e);
-                self.finish(&[]).await?;
                 return Err(e);
             }
         }
@@ -259,7 +249,7 @@ impl Core {
                 self.state.open_video(path)?;
             }
             Command::OpenTrack(path) => {
-                self.open_track(path).await?;
+                self.state.open_track(path)?;
             }
             Command::InitializeRecording(config) => {
                 self.state.initialize_recording(config)?;
@@ -333,30 +323,18 @@ impl Core {
         }
     }
 
-    async fn open_track(&mut self, path: String) -> Result<()> {
-        let tracks_response = self
-            .state
-            .connections
-            .track_recorder()
-            .context("TrackRecorder not connected")?
-            .load(TrackLoadRequest { load_path: path })
-            .await?;
-        self.state.tracks = tracks_response.into_inner().tracks;
-        Ok(())
-    }
-
     async fn finish_recording(&mut self) -> Result<()> {
         let save_request = TrackSaveRequest {
             experiment: Some(self.state.experiment.clone()),
-            tracks: self.state.tracks.clone(),
+            track: Some(self.state.track.clone()),
         };
+        log_error!(self.state.save_track());
         self.state
             .connections
             .track_recorder()
             .context("TrackRecorder not connected")?
             .save(save_request)
             .await?;
-
         Ok(())
     }
 }

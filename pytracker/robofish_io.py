@@ -19,63 +19,45 @@ class TrackRecorder(TrackRecorderBase):
     ) -> "Empty":
         return Empty()
 
-    async def load(self, empty: "Empty") -> "Track":
-        raise grpclib.GRPCError(grpclib.const.Status.UNIMPLEMENTED)
-
     async def save(self, track_save_request: "TrackSaveRequest") -> "Empty":
-        tracks = track_save_request.tracks
+        track = track_save_request.track
         filename = track_save_request.experiment.recording_config.base_path
         experiment = track_save_request.experiment
-
         self.world_size_cm = (experiment.arena.width_cm,
                               experiment.arena.height_cm)
         self.hz = experiment.target_fps
         recorded_entities = {}
-
-        loop.run_in_executor(None, lambda: self.save_tracks(filename, tracks))
+        loop.run_in_executor(None, lambda: self.save_track(filename, track))
         return Empty()
 
-    def save_tracks(self, filename, tracks):
-        tracks, start_frame_number = self.preprocess_tracks(tracks)
+    def save_track(self, filename, track):
         path = filename + '.hdf5'
-        with robofish.io.File(path, mode='w', world_size_cm=self.world_size_cm, frequency_hz=self.hz) as f:
-            for id, (track, skeleton) in tracks.items():
-                (poses,outlines) = self.track_to_poses(track, start_frame_number, skeleton)
+        with robofish.io.File(filename + '.hdf5', mode='w',
+                              world_size_cm=self.world_size_cm,
+                              frequency_hz=self.hz) as f:
+            for id, poses in self.entities_to_numpy(track).items():
+                print(poses)
                 f.create_entity(category='organism', name=f'fish_{id}', poses=poses)
 
-    def preprocess_tracks(self, tracks):
-        processed = {}
-        min_frame_number = 2**32
-        for id, track in tracks.items():
-            skeleton = track.skeleton
-            track = sorted(track.observations.items(), key=lambda x: x[0])
-            min_frame_number = min(min_frame_number, track[0][0])
-            processed[id] = (track, skeleton)
-        return (processed, min_frame_number)
-
-    def track_to_poses(self, track, start_frame_number, skeleton):
-        poses = []
-        skeletons = []
+    def entities_to_numpy(self, track):
         nan_pose = [np.nan] * 4
-        last_frame_number = start_frame_number - 1
-        n_nodes = len(skeleton.node_names)
-        nan_nodes = [[np.nan, np.nan] for _ in range(n_nodes)]
-        for frame_number, entity in track:
-            pose = entity.feature.pose
-
-            pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
-            if entity.frame_number > last_frame_number + 1:
-                fill_nan_start = last_frame_number + 1
-                fill_nan_end = entity.frame_number
-                poses.extend([nan_pose] * (fill_nan_end - fill_nan_start))
-                skeletons.extend([nan_nodes] * (fill_nan_end - fill_nan_start))
-            nodes = []
-            for node in entity.feature.nodes:
-                nodes.append([node.x, node.y])
-            skeletons.append(nodes)
-            poses.append(pose)
-            last_frame_number = entity.frame_number
-        return (np.array(poses), np.array(skeletons))
+        last_frame_numbers = {}
+        np_entities = {}
+        sorted_entities = sorted(track.entities.items(), key=lambda x: x[0])
+        for frame_number, entities in sorted_entities:
+            for entity in entities.entities:
+                pose = entity.feature.pose
+                pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
+                last_frame_number = last_frame_numbers.get(entity.id, track.start_frame - 1)
+                if entity.id not in np_entities:
+                    np_entities[entity.id] = []
+                if entity.frame_number > last_frame_number + 1:
+                    fill_nan_start = last_frame_number + 1
+                    fill_nan_end = entity.frame_number
+                    np_entities[entity.id].extend([nan_pose] * (fill_nan_end - fill_nan_start))
+                np_entities[entity.id].append(pose)
+                last_frame_numbers[entity.id] = entity.frame_number
+        return {id: np.array(poses) for id, poses in np_entities.items()}
 
     def plot(self, f, filename):
         os.system('robofish-io-evaluate tracks ' + filename)

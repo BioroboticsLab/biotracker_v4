@@ -26,3 +26,15 @@ pub fn framenumber_to_hhmmss(framenumber: u32, fps: f64) -> String {
     let hours = (duration.as_secs() / 60) / 60;
     format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
 }
+
+#[macro_export]
+macro_rules! log_error {
+    ( $x:expr ) => {
+        match $x {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("{}", e);
+            }
+        }
+    };
+}

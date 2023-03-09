@@ -3,15 +3,14 @@ use super::{
     arena::ArenaImpl, metric::DurationMetric, protocol::*, BiotrackerConfig, VideoDecoder,
     VideoEncoder,
 };
-use anyhow::Result;
-use std::collections::HashMap;
+use anyhow::{Context, Result};
 use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct State {
     pub config: BiotrackerConfig,
     pub experiment: Experiment,
-    pub tracks: HashMap<u32, Track>,
+    pub track: Track,
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
@@ -61,6 +60,14 @@ impl State {
         let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
         self.experiment.last_image = Some(image.clone());
         tracking_metrics.playback_frame_time = self.metrics.playback_frame_time.update();
+        if self.experiment.recording_state == RecordingState::Replay as i32 {
+            if let Some(features) = self.track.features.get(&image.frame_number) {
+                self.experiment.last_features = Some(features.clone());
+            }
+            if let Some(entities) = self.track.entities.get(&image.frame_number) {
+                self.experiment.last_entities = Some(entities.clone());
+            }
+        }
     }
 
     pub fn handle_tracking_result(
@@ -72,21 +79,8 @@ impl State {
         let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
         tracking_metrics.tracking_frame_time = self.metrics.tracking_frame_time.update();
         tracking_metrics.detected_features = features.features.len() as u32;
-        let skeleton = features.skeleton.clone();
-        for entity in &entities.entities {
-            if !self.tracks.contains_key(&entity.id) {
-                self.tracks.insert(
-                    entity.id,
-                    Track {
-                        skeleton: skeleton.clone(),
-                        observations: HashMap::new(),
-                    },
-                );
-            }
-            let track = self.tracks.get_mut(&entity.id).expect("track not found");
-            track.observations.insert(frame_number, entity.clone());
-        }
-
+        self.track.entities.insert(frame_number, entities.clone());
+        self.track.features.insert(frame_number, features.clone());
         self.experiment.last_features = Some(features);
         self.experiment.last_entities = Some(entities);
     }
@@ -99,6 +93,29 @@ impl State {
         self.video_decoder = Some(Arc::new(Mutex::new(decoder)));
         self.experiment.playback_state = PlaybackState::Playing as i32;
         result
+    }
+
+    pub fn open_track(&mut self, path: String) -> Result<()> {
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let track: Track = serde_json::from_reader(reader)?;
+        self.seek(track.start_frame)?;
+        self.track = track;
+        self.experiment.recording_state = RecordingState::Replay as i32;
+        Ok(())
+    }
+
+    pub fn save_track(&mut self) -> Result<()> {
+        let recording_config = self
+            .experiment
+            .recording_config
+            .as_ref()
+            .context("Missing recording config")?;
+        let path = std::path::PathBuf::from(&recording_config.base_path).with_extension("json");
+        let file = std::fs::File::create(path)?;
+        let writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(writer, &self.track)?;
+        Ok(())
     }
 
     pub fn close_decoder(&mut self) {
@@ -124,19 +141,21 @@ impl State {
 
     pub fn set_recording_state(&mut self, recording_state: i32) -> Result<()> {
         match RecordingState::from_i32(recording_state) {
-            Some(RecordingState::Recording) => {
-                self.tracks.clear();
+            Some(RecordingState::Recording) | Some(RecordingState::Initial) => {
+                let start_frame = match &self.experiment.last_image {
+                    Some(image) => image.frame_number,
+                    None => 0,
+                };
+                self.track = Track {
+                    start_frame,
+                    ..Default::default()
+                };
             }
             Some(RecordingState::Finished) => {
                 self.video_encoder = None;
                 self.experiment.recording_config = None;
             }
-            _ => {
-                return Err(anyhow::anyhow!(
-                    "Invalid recording state {:?}",
-                    recording_state
-                ));
-            }
+            _ => {}
         };
         self.experiment.recording_state = recording_state;
         Ok(())

@@ -38,19 +38,23 @@ impl ComponentConnections {
         !self.pending_connections.is_empty()
     }
 
-    pub async fn update_connections(&mut self) {
+    pub async fn update_connections(&mut self) -> Option<ServiceType> {
         if let Some(task) = self.pending_connections.last_mut() {
             match task.await.unwrap() {
                 Ok(connection) => {
+                    let service_type = connection.service_type;
                     self.connections.insert(connection.service_type, connection);
                     self.pending_connections.pop();
+                    return Some(service_type);
                 }
                 Err(err) => {
                     self.pending_connections.pop();
                     log::error!("Failed to connect to component: {}", err);
+                    return None;
                 }
             }
         }
+        None
     }
 
     pub async fn set_config(&mut self, config: ComponentConfig) -> Result<()> {

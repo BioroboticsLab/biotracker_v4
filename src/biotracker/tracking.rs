@@ -36,6 +36,9 @@ pub fn start_tracking_task(
     tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features, Entities)>>,
     image: &Image,
 ) {
+    if state.experiment.recording_state == RecordingState::Replay as i32 {
+        return;
+    }
     let image = image.clone();
     let detector = state.connections.feature_detector();
     let matcher = state.connections.matcher();

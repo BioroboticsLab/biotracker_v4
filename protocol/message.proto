@@ -118,20 +118,11 @@ service Matcher {
 
 message TrackSaveRequest {
     Experiment experiment = 1;
-    map<uint32, Track> tracks = 12;
-}
-
-message TrackLoadRequest {
-    string load_path = 3;
-}
-
-message Tracks {
-    map<uint32, Track> tracks = 12;
+    Track track = 12;
 }
 
 service TrackRecorder {
     rpc set_config(ComponentConfig) returns (Empty) {}
-    rpc load(TrackLoadRequest) returns (Tracks);
     rpc save(TrackSaveRequest) returns (Empty);
 }
 

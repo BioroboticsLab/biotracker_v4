@@ -23,12 +23,16 @@ impl Default for RecordButton {
 impl RecordButton {
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         match RecordingState::from_i32(ctx.experiment.recording_state).unwrap() {
+            RecordingState::Replay => {
+                let recording_icon = egui::RichText::new("⏺").color(egui::Color32::GREEN);
+                if ui.button(recording_icon).clicked() {
+                    ctx.bt
+                        .check_command(Command::RecordingState(RecordingState::Initial as i32));
+                }
+            }
             RecordingState::Recording => {
                 let recording_icon = egui::RichText::new("⏺").color(egui::Color32::RED);
-                if ui
-                    .button(recording_icon.color(egui::Color32::RED))
-                    .clicked()
-                {
+                if ui.button(recording_icon).clicked() {
                     ctx.bt
                         .command(Command::RecordingState(RecordingState::Finished as i32))
                         .unwrap();

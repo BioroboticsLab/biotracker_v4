@@ -33,10 +33,11 @@ fn main() {
         .spawn(move || {
             rt.block_on(async move {
                 match Core::new(&args).await {
-                    Ok(core) => match core.run().await {
+                    Ok(mut core) => match core.run().await {
                         Ok(_) => {}
                         Err(e) => {
                             log::error!("Core failed: {}", e);
+                            let _ = core.finish(&[]).await;
                         }
                     },
                     Err(e) => {
