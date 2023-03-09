@@ -2,10 +2,11 @@ from biotracker import *
 
 import cv2
 import numpy as np
-import sleap
 import tensorflow as tf
 import json
 import math
+import os
+import sys
 
 import asyncio
 from grpclib.client import Channel
@@ -36,41 +37,42 @@ class SLEAPTracker(FeatureDetectorBase):
         return features
 
     async def set_config(
-        self, component_configuration: "ComponentConfiguration"
+        self, component_configuration: "ComponentConfig"
     ) -> "Empty":
         await self.load_config(component_configuration.config_json)
         return Empty()
 
     async def load_config(self, config_json):
         config = json.loads(config_json)
-        model_paths = config['model_paths']
-        self.predictor = sleap.load_model(model_paths, batch_size=1)
-        self.target_width = self.predictor.centroid_config.data.preprocessing.target_width
-        self.target_height = self.predictor.centroid_config.data.preprocessing.target_height
-        await self.initialize_skeleton(config['model_config']['front_node'],
-                                       config['model_config']['center_node'])
-        # warmup inference
-        self.predictor.inference_model.predict(np.zeros((1, self.target_width, self.target_height, 1), dtype = "uint8"))
-        model_path = '/tmp/biotracker4_exported_model'
-        self.predictor.inference_model.save(model_path)
+        model_path = config['model_path']
+        config_path = os.path.join(model_path, 'config.json')
+        assert(model_path is not None and config_path is not None)
+        with open(config_path, 'r') as f:
+            metadata = json.load(f)
+            self.target_width = metadata['target_width']
+            self.target_height = metadata['target_height']
+            await self.initialize_skeleton(config['model_config']['front_node'],
+                                       config['model_config']['center_node'],
+                                       metadata['node_names'],
+                                       metadata['edge_indices'])
         self.model = tf.saved_model.load(model_path)
 
-    async def initialize_skeleton(self, center_node, front_node):
-        sleap_skeleton = self.predictor.centroid_config.data.labels.skeletons[0]
-        anchor_part = self.predictor.centroid_config.model.heads.centroid.anchor_part
+    async def initialize_skeleton(self, center_node, front_node, node_names, edge_indices):
+        assert(center_node is not None and front_node is not None)
+        assert(node_names is not None and edge_indices is not None)
         edges = []
-        for from_idx, to_idx in sleap_skeleton.edge_inds:
+        for from_idx, to_idx in edge_indices:
             edges.append(SkeletonEdge(source=from_idx, target=to_idx))
         front_node_index = None
         center_node_index = None
-        for i,name in enumerate(sleap_skeleton.node_names):
+        for i,name in enumerate(node_names):
             if name == front_node:
                 front_node_index = i
             if name == center_node:
                 center_node_index = i
         assert(front_node_index is not None and center_node_index is not None)
         skeleton_descriptor = SkeletonDescriptor(edges=edges,
-                                                 node_names=sleap_skeleton.node_names,
+                                                 node_names=node_names,
                                                  front_index=front_node_index,
                                                  center_index=center_node_index)
         self.skeleton = skeleton_descriptor

@@ -10,3 +10,4 @@ pytracker/biotracker/biotracker/**
 **.png
 AppDir/
 *.AppImage
+saved_model/**
