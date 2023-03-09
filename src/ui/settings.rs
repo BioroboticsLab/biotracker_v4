@@ -73,7 +73,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         let difference = entity_count as i32 - ctx.experiment.entity_ids.len() as i32;
         if difference > 0 {
             for _ in 0..difference {
-                ctx.bt.check_command(Command::AddEntity(Empty {}));
+                ctx.bt.command(Command::AddEntity(Empty {}));
             }
         } else {
             for i in 0..difference.abs() {
@@ -81,7 +81,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
                     break;
                 }
                 let id = ctx.experiment.entity_ids[i as usize];
-                ctx.bt.check_command(Command::RemoveEntity(id));
+                ctx.bt.command(Command::RemoveEntity(id));
             }
         }
     }
@@ -89,7 +89,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     let mut fps = ctx.experiment.target_fps;
     ui.add(egui::Label::new("Target FPS")).changed();
     if ui.add(egui::DragValue::new(&mut fps)).changed() {
-        ctx.bt.check_command(Command::TargetFps(fps as f32));
+        ctx.bt.command(Command::TargetFps(fps as f32));
     }
 
     if ui
@@ -100,7 +100,7 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         .changed()
     {
         ctx.bt
-            .check_command(Command::RealtimeMode(ctx.experiment.realtime_mode));
+            .command(Command::RealtimeMode(ctx.experiment.realtime_mode));
     }
     ui.end_row();
     ui.end_row();
@@ -134,7 +134,7 @@ pub fn arena_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     ui.end_row();
 
     if send_update {
-        ctx.bt.check_command(Command::UpdateArena(arena.clone()));
+        ctx.bt.command(Command::UpdateArena(arena.clone()));
     }
 }
 
@@ -180,9 +180,7 @@ pub fn settings_window(
                         .show(ui, &mut component.config_json)
                         .changed()
                     {
-                        ctx.bt
-                            .command(Command::UpdateComponent(component.clone()))
-                            .unwrap();
+                        ctx.bt.command(Command::UpdateComponent(component.clone()));
                     }
                 }
             });
@@ -205,17 +203,12 @@ pub fn filemenu() -> Option<String> {
 
 pub fn open_track(ctx: &mut BioTrackerUIContext) {
     if let Some(path) = filemenu() {
-        ctx.bt.command(Command::OpenTrack(path)).unwrap();
+        ctx.bt.command(Command::OpenTrack(path));
     }
 }
 
 pub fn open_video(ctx: &mut BioTrackerUIContext) {
     if let Some(path) = filemenu() {
-        match ctx.bt.command(Command::OpenVideo(path.to_owned())) {
-            Ok(_) => {}
-            Err(e) => {
-                log::error!("Failed to open video: {}", e);
-            }
-        }
+        ctx.bt.command(Command::OpenVideo(path.to_owned()));
     }
 }

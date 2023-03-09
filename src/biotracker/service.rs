@@ -19,7 +19,7 @@ impl BioTracker for Service {
         Ok(Response::new(
             ChannelRequest::send(self.state_tx.clone(), ())
                 .await
-                .map_err(|e| Status::internal(format!("Error while getting state: {}", e)))?,
+                .map_err(|e| Status::internal(format!("{}", e)))?,
         ))
     }
 
@@ -33,10 +33,8 @@ impl BioTracker for Service {
                 request.into_inner().command.unwrap(),
             )
             .await
-            .map_err(|e| Status::internal(format!("Error while sending command: {}", e)))?
-            .map_err(|e| {
-                Status::invalid_argument(format!("Error while executing command: {}", e))
-            })?,
+            .map_err(|e| Status::internal(format!("{}", e)))?
+            .map_err(|e| Status::invalid_argument(format!("{}", e)))?,
         ))
     }
 
@@ -44,8 +42,8 @@ impl BioTracker for Service {
         Ok(Response::new(
             ChannelRequest::send(self.image_tx.clone(), request.into_inner())
                 .await
-                .map_err(|e| Status::internal(format!("Error while sending image request: {}", e)))?
-                .map_err(|e| Status::invalid_argument(format!("Error {}", e)))?,
+                .map_err(|e| Status::internal(format!("{}", e)))?
+                .map_err(|e| Status::invalid_argument(format!("{}", e)))?,
         ))
     }
 }

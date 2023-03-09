@@ -33,16 +33,19 @@ impl BioTrackerController {
         Ok(response?.into_inner())
     }
 
-    pub fn check_command(&mut self, command: Command) {
-        match self.command(command) {
+    pub fn command(&mut self, command: Command) {
+        match self.command_request(command.clone()) {
             Ok(_) => {}
             Err(e) => {
-                log::error!("Command failed: {}", e);
+                log::error!(target: "", "{}: {}", error_message(&command), e.message());
             }
         }
     }
 
-    pub fn command(&mut self, command: Command) -> Result<Empty> {
+    fn command_request(
+        &mut self,
+        command: Command,
+    ) -> Result<tonic::Response<Empty>, tonic::Status> {
         let BioTrackerController { client, rt } = self;
         let response = rt.block_on(async move {
             let biotracker_command = BioTrackerCommand {
@@ -51,7 +54,7 @@ impl BioTrackerController {
             let request = tonic::Request::new(biotracker_command);
             client.command(request).await
         });
-        Ok(response?.into_inner())
+        response
     }
 
     pub fn add_image(&mut self, image: Image) -> Result<Empty> {
@@ -61,5 +64,34 @@ impl BioTrackerController {
             client.add_image(request).await
         });
         Ok(response?.into_inner())
+    }
+}
+
+fn error_message(command: &Command) -> String {
+    match command {
+        Command::PlaybackState(state) => format!("Failed to set playback state to {}", state),
+        Command::RecordingState(state) => format!("Failed to set recording state to {}", state),
+        Command::RealtimeMode(state) => format!("Failed to set realtime mode to {}", state),
+        Command::TargetFps(fps) => format!("Failed to set target fps to {}", fps),
+        Command::Seek(frame) => format!("Failed to seek to frame {}", frame),
+        Command::OpenVideo(path) => format!("Failed to open video {}", path),
+        Command::OpenTrack(path) => format!("Failed to open track {}", path),
+        Command::InitializeRecording(config) => {
+            format!("Failed to initialize recording with config {:?}", config)
+        }
+        Command::AddEntity(_) => format!("Failed to add entity"),
+        Command::RemoveEntity(_) => format!("Failed to remove"),
+        Command::SwitchEntities(idswitch) => {
+            format!(
+                "Failed to switch entities {} and {}",
+                idswitch.id1, idswitch.id2
+            )
+        }
+        Command::UpdateArena(arena) => format!("Failed to update arena {:?}", arena),
+        Command::UpdateComponent(component) => {
+            format!("Failed to set component config {:?}", component)
+        }
+        Command::SaveConfig(_) => format!("Failed to save config"),
+        Command::Shutdown(_) => format!("Failed to shutdown"),
     }
 }

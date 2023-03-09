@@ -312,7 +312,7 @@ impl AnnotatedVideo {
                     &arena.rectification_corners,
                     &egui::Stroke::new(4.0, egui::Color32::RED.linear_multiply(0.25)),
                 ) {
-                    ctx.bt.check_command(Command::UpdateArena(Arena {
+                    ctx.bt.command(Command::UpdateArena(Arena {
                         rectification_corners: changed_corners,
                         ..ctx.experiment.arena.clone().expect("Arena not set")
                     }));
@@ -327,7 +327,7 @@ impl AnnotatedVideo {
                     &arena.tracking_area_corners,
                     &egui::Stroke::new(4.0, egui::Color32::BLUE.linear_multiply(0.25)),
                 ) {
-                    ctx.bt.check_command(Command::UpdateArena(Arena {
+                    ctx.bt.command(Command::UpdateArena(Arena {
                         tracking_area_corners: changed_corners,
                         ..ctx.experiment.arena.clone().expect("Arena not set")
                     }));

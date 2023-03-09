@@ -21,8 +21,7 @@ impl EntitySwitcher {
                 ) {
                     if ui.button("Switch").clicked() {
                         ctx.bt
-                            .command(Command::SwitchEntities(EntityIdSwitch { id1, id2 }))
-                            .unwrap();
+                            .command(Command::SwitchEntities(EntityIdSwitch { id1, id2 }));
                     }
                 } else {
                     ui.add_enabled(false, egui::Button::new("Switch"));

@@ -31,12 +31,7 @@ impl CameraButton {
                         .show_ui(ui, |ui| {
                             for camera in &self.cameras {
                                 if ui.selectable_label(false, camera).clicked() {
-                                    match ctx.bt.command(Command::OpenVideo(camera.to_owned())) {
-                                        Ok(_) => self.dialog_open = false,
-                                        Err(e) => {
-                                            log::error!("Failed to open video: {}", e);
-                                        }
-                                    }
+                                    ctx.bt.command(Command::OpenVideo(camera.to_owned()));
                                 }
                             }
                         });

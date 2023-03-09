@@ -27,15 +27,14 @@ impl RecordButton {
                 let recording_icon = egui::RichText::new("⏺").color(egui::Color32::GREEN);
                 if ui.button(recording_icon).clicked() {
                     ctx.bt
-                        .check_command(Command::RecordingState(RecordingState::Initial as i32));
+                        .command(Command::RecordingState(RecordingState::Initial as i32));
                 }
             }
             RecordingState::Recording => {
                 let recording_icon = egui::RichText::new("⏺").color(egui::Color32::RED);
                 if ui.button(recording_icon).clicked() {
                     ctx.bt
-                        .command(Command::RecordingState(RecordingState::Finished as i32))
-                        .unwrap();
+                        .command(Command::RecordingState(RecordingState::Finished as i32));
                 }
             }
             RecordingState::Initial | RecordingState::Finished => {
@@ -102,12 +101,10 @@ impl RecordButton {
                                         width: video_info.width,
                                         height: video_info.height,
                                         image_stream_id,
-                                    }))
-                                    .unwrap();
+                                    }));
                             }
                             ctx.bt
-                                .command(Command::RecordingState(RecordingState::Recording as i32))
-                                .unwrap();
+                                .command(Command::RecordingState(RecordingState::Recording as i32));
                             self.dialog_open = false;
                         }
                         if ui.button("Cancel").clicked() {
