@@ -33,9 +33,12 @@ fn main() {
         .spawn(move || {
             rt.block_on(async move {
                 match Core::new(&args).await {
-                    Ok(core) => {
-                        core.run().await.unwrap();
-                    }
+                    Ok(core) => match core.run().await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            log::error!("Core failed: {}", e);
+                        }
+                    },
                     Err(e) => {
                         println!("Failed to start BioTracker Core: {}", e);
                     }

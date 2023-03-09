@@ -50,6 +50,7 @@ pub struct BioTrackerUI {
     components: BioTrackerUIComponents,
     context: BioTrackerUIContext,
     core_thread: Option<JoinHandle<()>>,
+    get_state_retry: Option<std::time::Instant>,
 }
 
 impl BioTrackerUI {
@@ -97,6 +98,7 @@ impl BioTrackerUI {
                 metrics_plot: MetricsPlot::new(),
                 log_view: LogView::new(logger),
             },
+            get_state_retry: None,
             core_thread: Some(core_thread),
         })
     }
@@ -123,16 +125,21 @@ impl BioTrackerUI {
     }
 
     fn update_context(&mut self, frame: &mut eframe::Frame) {
+        if let Some(retry) = &self.get_state_retry {
+            if retry.elapsed().as_secs() < 1 {
+                return;
+            }
+        }
         match self.context.bt.get_state() {
             Ok(state) => {
                 self.context.experiment = state;
                 self.update_image(frame);
             }
             Err(e) => {
-                log::error!("Failed to get state: {}", e);
+                self.get_state_retry = Some(std::time::Instant::now());
+                log::error!("Could not get state from core: {}", e);
             }
         }
-        self.update_image(frame);
     }
 
     fn handle_shortcuts(&mut self, ctx: &egui::Context) -> Result<()> {

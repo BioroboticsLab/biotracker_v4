@@ -71,6 +71,7 @@ impl ProcessManager {
             .collect::<Vec<_>>();
         futures::future::join_all(futures).await;
         self.processes.clear();
+        futures::future::join_all(self.tasks.drain(..)).await;
         Ok(())
     }
 

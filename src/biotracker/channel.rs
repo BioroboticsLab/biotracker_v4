@@ -15,7 +15,9 @@ where
 {
     pub async fn send(tx: mpsc::Sender<Self>, request: Req) -> Result<Res> {
         let (result_tx, result_rx) = channel();
-        tx.send(Self { request, result_tx }).await.unwrap();
+        tx.send(Self { request, result_tx })
+            .await
+            .map_err(|e| anyhow::anyhow!("ChannelRequest failed: {:?}", e))?;
         Ok(result_rx.await?)
     }
 }

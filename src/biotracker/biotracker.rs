@@ -112,7 +112,17 @@ impl Core {
     }
 
     pub async fn run(mut self) -> Result<()> {
-        self.init().await?;
+        match self.init().await {
+            Ok(_) => {}
+            Err(e) => {
+                log::error!("Failed to initialize: {}", e);
+                // We still initialize the process manager here, so that stdout of failed
+                // components gets logged before shutdown.
+                self.process_manager.run();
+                self.finish(&[]).await?;
+                return Err(e);
+            }
+        }
         self.process_manager.run();
 
         let mut fps = self.state.experiment.target_fps;
