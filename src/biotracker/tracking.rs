@@ -6,8 +6,9 @@ async fn tracking_task(
     mut detector: FeatureDetectorClient<tonic::transport::Channel>,
     mut matcher: MatcherClient<tonic::transport::Channel>,
     arena: ArenaImpl,
-    last_entities: Entities,
-) -> Result<(u32, Features, Entities)> {
+    last_features: Features,
+    entity_ids: Vec<u32>,
+) -> Result<(u32, Features)> {
     let frame_number = image.frame_number;
     let detector_request = DetectorRequest {
         image: Some(image),
@@ -17,23 +18,24 @@ async fn tracking_task(
         .detect_features(detector_request)
         .await?
         .into_inner();
+    features.frame_number = frame_number;
 
     arena.features_to_poses(&mut features)?;
 
     let matcher_request = MatcherRequest {
         features: Some(features.clone()),
-        last_entities: Some(last_entities),
-        frame_number,
+        last_features: Some(last_features),
+        entity_ids,
     };
-    let entities = matcher.match_features(matcher_request).await?.into_inner();
-    Ok((frame_number, features, entities))
+    features = matcher.match_features(matcher_request).await?.into_inner();
+    Ok((frame_number, features))
 }
 
 pub fn start_tracking_task(
     state: &State,
     entity_switch_request: Option<EntityIdSwitch>,
     task_handle: &mut Option<tokio::task::JoinHandle<()>>,
-    tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features, Entities)>>,
+    tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features)>>,
     image: &Image,
 ) {
     if state.experiment.recording_state == RecordingState::Replay as i32 {
@@ -46,46 +48,39 @@ pub fn start_tracking_task(
         return;
     }
     let (detector, matcher) = (detector.unwrap(), matcher.unwrap());
-    let last_entities = state
+    let mut last_features = state
         .experiment
-        .last_entities
-        .as_ref()
-        .expect("last_entities is None");
-
-    let mut tracking_entities = Entities::default();
-    for id in &state.experiment.entity_ids {
-        if let Some(entity) = last_entities.entities.iter().find(|e| e.id == *id) {
-            tracking_entities.entities.push(entity.clone());
-        } else {
-            tracking_entities.entities.push(Entity {
-                id: *id,
-                feature: None,
-                frame_number: 0,
-            });
-        }
-    }
-
-    if let Some(switch_request) = entity_switch_request {
-        let (mut first_idx, mut second_idx) = (None, None);
-        for (idx, entity) in tracking_entities.entities.iter().enumerate() {
-            if entity.id == switch_request.id1 {
-                first_idx = Some(idx);
-            }
-            if entity.id == switch_request.id2 {
-                second_idx = Some(idx);
-            }
-        }
-
-        if let (Some(first_idx), Some(second_idx)) = (first_idx, second_idx) {
-            tracking_entities.entities[first_idx].id = switch_request.id2;
-            tracking_entities.entities[second_idx].id = switch_request.id1;
-        }
-    }
+        .last_features
+        .clone()
+        .expect("last_features is None");
+    switch_entity_ids(&mut last_features, entity_switch_request);
 
     let arena = state.arena_impl.clone();
     let tracking_tx = tracking_tx.clone();
+    let entity_ids = state.experiment.entity_ids.clone();
     *task_handle = Some(tokio::spawn(async move {
-        let result = tracking_task(image, detector, matcher, arena, tracking_entities).await;
+        let result =
+            tracking_task(image, detector, matcher, arena, last_features, entity_ids).await;
         tracking_tx.send(result).await.unwrap();
     }));
+}
+
+fn switch_entity_ids(features: &mut Features, switch_request: Option<EntityIdSwitch>) {
+    if let Some(switch_request) = switch_request {
+        let (first_idx, second_idx) = (
+            features
+                .features
+                .iter()
+                .position(|f| f.id == Some(switch_request.id1)),
+            features
+                .features
+                .iter()
+                .position(|f| f.id == Some(switch_request.id2)),
+        );
+
+        if let (Some(first_idx), Some(second_idx)) = (first_idx, second_idx) {
+            features.features[first_idx].id = Some(switch_request.id2);
+            features.features[second_idx].id = Some(switch_request.id1);
+        }
+    }
 }

@@ -45,9 +45,9 @@ impl State {
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
                 realtime_mode: true,
-                last_entities: Some(Entities { entities: vec![] }),
                 tracking_metrics: Some(TrackingMetrics::default()),
                 components,
+                last_features: Some(Features::default()),
                 ..Default::default()
             },
             config,
@@ -64,25 +64,15 @@ impl State {
             if let Some(features) = self.track.features.get(&image.frame_number) {
                 self.experiment.last_features = Some(features.clone());
             }
-            if let Some(entities) = self.track.entities.get(&image.frame_number) {
-                self.experiment.last_entities = Some(entities.clone());
-            }
         }
     }
 
-    pub fn handle_tracking_result(
-        &mut self,
-        frame_number: u32,
-        features: Features,
-        entities: Entities,
-    ) {
+    pub fn handle_tracking_result(&mut self, frame_number: u32, features: Features) {
         let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
         tracking_metrics.tracking_frame_time = self.metrics.tracking_frame_time.update();
         tracking_metrics.detected_features = features.features.len() as u32;
-        self.track.entities.insert(frame_number, entities.clone());
         self.track.features.insert(frame_number, features.clone());
         self.experiment.last_features = Some(features);
-        self.experiment.last_entities = Some(entities);
     }
 
     pub fn open_video(&mut self, path: String) -> Result<VideoInfo> {

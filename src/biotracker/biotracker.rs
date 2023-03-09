@@ -193,14 +193,14 @@ impl Core {
                 Some(tracking_result) = tracking_rx.recv() => {
                     tracking_task = None;
                     match tracking_result {
-                        Ok((frame_number, features, entities)) => {
+                        Ok((frame_number, features)) => {
                             self.robofish_commander_bridge.send(
-                                &entities,
+                                &features,
                                 &self.state.experiment.arena,
                                 frame_number,
                                 self.state.experiment.target_fps
                             ).await?;
-                            self.state.handle_tracking_result(frame_number, features, entities);
+                            self.state.handle_tracking_result(frame_number, features);
                             if let Some(image) =  &self.state.experiment.last_image {
                                 if image.frame_number != frame_number {
                                     let switch_request = self.state.switch_request.take();

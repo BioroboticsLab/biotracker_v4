@@ -21,30 +21,21 @@ impl Matcher for MatcherService {
     async fn match_features(
         &self,
         request: Request<MatcherRequest>,
-    ) -> Result<Response<Entities>, Status> {
+    ) -> Result<Response<Features>, Status> {
         let request = request.into_inner();
         let MatcherRequest {
             features,
-            frame_number,
-            last_entities,
+            last_features,
+            entity_ids,
         } = request;
 
-        let features = match features {
-            Some(features) => features,
-            None => return Err(Status::invalid_argument("features must not be None")),
-        };
-
-        let last_entities = match last_entities {
-            Some(entities) => entities,
-            None => return Err(Status::invalid_argument("entities must not be None")),
-        };
-
+        let features = features.expect("features must not be None");
+        let last_features = last_features.expect("last_features must not be None");
         let config = self.inner.lock().unwrap().clone();
-
         Ok(Response::new(MatcherService::hungarian_matching(
             config,
-            frame_number,
-            last_entities,
+            entity_ids,
+            last_features,
             features,
         )))
     }
@@ -72,16 +63,17 @@ impl MatcherService {
 
     fn hungarian_matching(
         config: MatcherConfig,
-        frame_number: u32,
-        last_entities: Entities,
-        features_msg: Features,
-    ) -> Entities {
+        entity_ids: Vec<u32>,
+        last_features: Features,
+        mut features_msg: Features,
+    ) -> Features {
+        let frame_number = features_msg.frame_number;
         // Remove out-of-bound features and features containing NaN values
         let mut nan_count = 0;
         let mut oob_count = 0;
-        let mut features: Vec<&Feature> = features_msg
+        let mut features: Vec<&mut Feature> = features_msg
             .features
-            .iter()
+            .iter_mut()
             .filter(|f| {
                 let mut result = true;
                 if config.ignore_out_of_bounds && f.out_of_bounds {
@@ -110,8 +102,7 @@ impl MatcherService {
         }
 
         // Remove lowest scoring features, if there is more then we expect
-        let mut last_entities = last_entities.entities;
-        let entity_count = last_entities.len();
+        let entity_count = entity_ids.len();
 
         if features.len() > entity_count {
             // sort by score in descending order
@@ -125,23 +116,29 @@ impl MatcherService {
             }
         }
 
+        let last_matched_features = entity_ids
+            .iter()
+            .map(|id| {
+                last_features.features.iter().find(|f| match f.id {
+                    Some(i) => i == *id,
+                    None => false,
+                })
+            })
+            .collect::<Vec<_>>();
+
         // Match features
-        let weights = MatcherService::distance_matrix(&features, &last_entities);
+        let weights = MatcherService::distance_matrix(&features, &last_matched_features);
         let (_, assignment) = kuhn_munkres_min(&weights);
 
         for (feature_idx, last_feature_idx) in assignment.iter().enumerate() {
             if feature_idx >= features.len() {
                 break;
             }
-
-            let feature = features[feature_idx].clone();
-            last_entities[*last_feature_idx].feature = Some(feature);
-            last_entities[*last_feature_idx].frame_number = frame_number;
+            let id = entity_ids[*last_feature_idx];
+            features[feature_idx].id = Some(id);
         }
 
-        Entities {
-            entities: last_entities,
-        }
+        features_msg
     }
 
     fn distance(a: &Feature, b: &Feature) -> i64 {
@@ -162,25 +159,21 @@ impl MatcherService {
         node_squared_distance_sum / node_cnt
     }
 
-    fn distance_matrix(features: &Vec<&Feature>, last_entities: &Vec<Entity>) -> Matrix<i64> {
-        let n = features.len().max(last_entities.len());
+    fn distance_matrix(
+        features: &Vec<&mut Feature>,
+        last_features: &Vec<Option<&Feature>>,
+    ) -> Matrix<i64> {
+        let n = features.len().max(last_features.len());
         let mut distances = Matrix::new(n, n, 0);
         let max_distance = 1000000;
         for feature_idx in 0..n {
             for last_feature_idx in 0..n {
                 let distance_ref = distances.get_mut((feature_idx, last_feature_idx)).unwrap();
-                *distance_ref = if feature_idx >= features.len()
-                    || last_entities[last_feature_idx].feature.is_none()
-                    || features[feature_idx].out_of_bounds
-                {
+                let last_feature = last_features[last_feature_idx];
+                *distance_ref = if feature_idx >= features.len() || last_feature.is_none() {
                     max_distance
                 } else {
-                    let feature = &features[feature_idx];
-                    let last_feature = &last_entities[last_feature_idx]
-                        .feature
-                        .as_ref()
-                        .expect("invalid none feature");
-                    MatcherService::distance(feature, last_feature)
+                    MatcherService::distance(&features[feature_idx], last_feature.unwrap())
                 };
             }
         }

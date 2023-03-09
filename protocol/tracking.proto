@@ -13,28 +13,19 @@ message Feature {
   Pose pose = 2;
   float score = 3;
   bool out_of_bounds = 4;
+  optional uint32 id = 5;
 }
 
 message Features {
   repeated Feature features = 2;
   SkeletonDescriptor skeleton = 3;
-}
-
-message Entity {
-  uint32 id = 1;
-  uint32 frame_number = 2;
-  Feature feature = 3;
-}
-
-message Entities {
-  repeated Entity entities = 2;
+  uint32 frame_number = 4;
 }
 
 message Track {
   uint32 start_frame = 1;
-  // map from frame number to entity
+  // map from frame number to features
   map<uint32, Features> features = 2;
-  map<uint32, Entities> entities = 3;
 }
 
 message SkeletonNode {

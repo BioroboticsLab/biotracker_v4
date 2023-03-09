@@ -277,25 +277,19 @@ impl AnnotatedVideo {
             uv,
             egui::Color32::WHITE,
         );
-        let mut skeleton = None;
         if let Some(features) = &ctx.experiment.last_features {
-            if self.draw_features {
-                for feature in &features.features {
+            for feature in &features.features {
+                if self.draw_features {
                     let color = match feature.out_of_bounds {
                         true => egui::Color32::RED,
                         false => egui::Color32::GREEN,
                     };
                     self.paint_feature(None, &painter, feature, &features.skeleton, color);
                 }
-            }
-            skeleton = features.skeleton.clone();
-        }
-        if let Some(entities) = &ctx.experiment.last_entities {
-            if self.draw_entities {
-                for entity in &entities.entities {
-                    if let Some(feature) = &entity.feature {
-                        let color = ctx.color_palette.pick(entity.id);
-                        self.paint_feature(Some(entity.id), &painter, feature, &skeleton, color);
+                if let Some(id) = feature.id {
+                    if self.draw_entities {
+                        let color = ctx.color_palette.pick(id);
+                        self.paint_feature(Some(id), &painter, feature, &features.skeleton, color);
                     }
                 }
             }

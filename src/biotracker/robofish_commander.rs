@@ -1,4 +1,4 @@
-use super::protocol::{Arena, Entities};
+use super::protocol::{Arena, Features};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -28,25 +28,25 @@ impl RobofishCommander {
 
     pub async fn send(
         &mut self,
-        entities: &Entities,
+        features: &Features,
         arena: &Option<Arena>,
         frame_number: u32,
         fps: f32,
     ) -> Result<()> {
         let mut drop_connections = vec![];
         for (addr, stream) in self.streams.iter_mut() {
-            let fishcount = entities.entities.len();
+            let fishcount = features.features.len();
             let mut msg = format!("frame:{frame_number};polygon:0;fishcount:{fishcount};");
             let arena = arena.as_ref().expect("Arena not set");
 
-            for entity in &entities.entities {
-                if let Some(feature) = &entity.feature {
+            for feature in &features.features {
+                if let Some(id) = feature.id {
                     if let Some(pose) = &feature.pose {
                         let orientation_deg = pose.orientation_rad * 180.0 / std::f32::consts::PI;
                         let timestamp_ms = (frame_number as f64 / fps as f64 * 1000.0) as u64;
                         let fish = format!(
                             "{},{},{},{},{},20,20,{},F&",
-                            entity.id,
+                            id,
                             pose.x_cm + arena.width_cm as f32 / 2.0,
                             arena.height_cm as f32 / 2.0 - pose.y_cm,
                             pose.orientation_rad,
@@ -57,7 +57,7 @@ impl RobofishCommander {
                     }
                 }
             }
-            if entities.entities.len() > 0 {
+            if fishcount > 0 {
                 msg.pop();
             }
             msg += ";end";

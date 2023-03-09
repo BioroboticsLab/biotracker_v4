@@ -75,7 +75,6 @@ message Experiment {
     optional TrackingMetrics tracking_metrics = 14;
     optional Image last_image = 9;
     optional Features last_features = 11;
-    optional Entities last_entities = 10;
     repeated uint32 entity_ids = 13;
     optional Transform rectification = 15;
     repeated ComponentConfig components = 16;
@@ -106,14 +105,14 @@ service FeatureDetector {
 }
 
 message MatcherRequest {
-    Features features = 1;
-    uint32 frame_number = 4;
-    Entities last_entities = 2;
+    repeated uint32 entity_ids = 1;
+    Features features = 3;
+    Features last_features = 2;
 }
 
 service Matcher {
     rpc set_config(ComponentConfig) returns (Empty) {}
-    rpc match_features(MatcherRequest) returns (Entities);
+    rpc match_features(MatcherRequest) returns (Features);
 }
 
 message TrackSaveRequest {

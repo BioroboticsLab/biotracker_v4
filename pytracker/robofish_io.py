@@ -36,30 +36,31 @@ class TrackRecorder(TrackRecorderBase):
                               world_size_cm=self.world_size_cm,
                               frequency_hz=self.hz) as f:
             for id, poses in self.entities_to_numpy(track).items():
-                print(poses)
                 f.create_entity(category='organism', name=f'fish_{id}', poses=poses)
 
     def entities_to_numpy(self, track):
         nan_pose = [np.nan] * 4
-        last_frame_numbers = {}
+        entity_last_seen = {}
         np_entities = {}
-        sorted_entities = sorted(track.entities.items(), key=lambda x: x[0])
-        for frame_number, entities in sorted_entities:
-            for entity in entities.entities:
-                pose = entity.feature.pose
+        sorted_features = sorted(track.features.items(), key=lambda x: x[0])
+        for frame_number, features in sorted_features:
+            for feature in features.features:
+                if feature.id is None:
+                    continue
+                pose = feature.pose
                 pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
-                last_frame_number = last_frame_numbers.get(entity.id, track.start_frame - 1)
-                if entity.id not in np_entities:
-                    np_entities[entity.id] = []
-                if entity.frame_number > last_frame_number + 1:
-                    fill_nan_start = last_frame_number + 1
-                    fill_nan_end = entity.frame_number
-                    np_entities[entity.id].extend([nan_pose] * (fill_nan_end - fill_nan_start))
-                np_entities[entity.id].append(pose)
-                last_frame_numbers[entity.id] = entity.frame_number
+                last_seen = entity_last_seen.get(feature.id, track.start_frame - 1)
+                if feature.id not in np_entities:
+                    np_entities[feature.id] = []
+                if frame_number > last_seen + 1:
+                    fill_nan_start = last_seen + 1
+                    fill_nan_end = frame_number
+                    np_entities[feature.id].extend([nan_pose] * (fill_nan_end - fill_nan_start))
+                np_entities[feature.id].append(pose)
+                entity_last_seen[feature.id] = frame_number
         return {id: np.array(poses) for id, poses in np_entities.items()}
 
-    def plot(self, f, filename):
+    def plot(self, filename):
         os.system('robofish-io-evaluate tracks ' + filename)
 
 
