@@ -50,6 +50,7 @@ message BioTrackerCommand {
         EntityIDSwitch switch_entities = 10;
         Arena update_arena = 13;
         ComponentConfig update_component = 15;
+        UndistortMode undistort_mode = 16;
         Empty save_config = 14;
         Empty shutdown = 8;
     }
@@ -72,6 +73,7 @@ message Experiment {
     PlaybackState playback_state = 7;
     RecordingState recording_state = 8;
     bool realtime_mode = 12;
+    UndistortMode undistort_mode = 17;
     optional TrackingMetrics tracking_metrics = 14;
     optional Image last_image = 9;
     optional Features last_features = 11;
@@ -140,5 +142,6 @@ message ComponentConfig {
 
 message BiotrackerConfig {
     repeated ComponentConfig components = 1;
+    repeated CameraConfig cameras = 3;
     Arena arena = 2;
 }

@@ -1,4 +1,5 @@
 use super::component::ComponentConnections;
+use super::undistort::UndistortMap;
 use super::{
     arena::ArenaImpl, metric::DurationMetric, protocol::*, BiotrackerConfig, VideoDecoder,
     VideoEncoder,
@@ -14,6 +15,7 @@ pub struct State {
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
+    pub undistortion: Option<UndistortMap>,
     pub metrics: Metrics,
     pub arena_impl: ArenaImpl,
     pub connections: ComponentConnections,
@@ -48,6 +50,7 @@ impl State {
                 tracking_metrics: Some(TrackingMetrics::default()),
                 components,
                 last_features: Some(Features::default()),
+                undistort_mode: UndistortMode::None as i32,
                 ..Default::default()
             },
             config,
@@ -75,14 +78,44 @@ impl State {
         self.experiment.last_features = Some(features);
     }
 
-    pub fn open_video(&mut self, path: String) -> Result<VideoInfo> {
-        let decoder = VideoDecoder::new(path, self.experiment.target_fps as f64)?;
+    pub fn open_video(
+        &mut self,
+        path: String,
+        force_undistortion: &Option<String>,
+    ) -> Result<VideoInfo> {
+        let decoder = VideoDecoder::new(
+            path,
+            self.experiment.target_fps as f64,
+            &self.config.cameras,
+        )?;
         let video_info = decoder.info.clone();
+
+        let camera_config = match force_undistortion {
+            Some(id) => self.config.cameras.iter().find(|c| c.id == *id),
+            None => decoder.camera_config.as_ref(),
+        };
+        if let Some(config) = camera_config {
+            self.undistortion = Some(UndistortMap::try_from((config, &video_info))?);
+            if self.experiment.undistort_mode == UndistortMode::None as i32 {
+                self.experiment.undistort_mode = UndistortMode::Poses as i32;
+            }
+        } else {
+            self.experiment.undistort_mode = UndistortMode::None as i32;
+        }
         let result = Ok(video_info.clone());
         self.experiment.video_info = Some(video_info);
         self.video_decoder = Some(Arc::new(Mutex::new(decoder)));
         self.experiment.playback_state = PlaybackState::Playing as i32;
         result
+    }
+
+    pub fn set_undistort_mode(&mut self, mode: i32) -> Result<()> {
+        let mode = UndistortMode::from_i32(mode).context("Invalid undistort mode")?;
+        if mode != UndistortMode::None && self.undistortion.is_none() {
+            return Err(anyhow::anyhow!("No undistortion map configured"));
+        }
+        self.experiment.undistort_mode = mode as i32;
+        Ok(())
     }
 
     pub fn open_track(&mut self, path: String) -> Result<()> {
@@ -196,5 +229,13 @@ impl State {
         self.config.components = self.experiment.components.clone();
         self.config.save(path)?;
         Ok(())
+    }
+
+    pub fn get_undistortion(&self, mode: UndistortMode) -> Option<UndistortMap> {
+        if mode as i32 == self.experiment.undistort_mode {
+            self.undistortion.clone()
+        } else {
+            None
+        }
     }
 }

@@ -60,6 +60,32 @@ pub fn video_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     ui.add(egui::Label::new("Height"));
     ui.add(egui::DragValue::new(&mut height));
     ui.end_row();
+    ui.add(egui::Label::new("Undistortion Mode"));
+
+    egui::ComboBox::from_id_source("undistortion_mode")
+        .selected_text(undistort_description(
+            &UndistortMode::from_i32(ctx.experiment.undistort_mode).unwrap(),
+        ))
+        .show_ui(ui, |ui| {
+            for mode in [
+                UndistortMode::None,
+                UndistortMode::Image,
+                UndistortMode::Poses,
+            ] {
+                if ui
+                    .selectable_value(
+                        &mut ctx.experiment.undistort_mode,
+                        mode as i32,
+                        undistort_description(&mode),
+                    )
+                    .clicked()
+                {
+                    ctx.bt.command(Command::UndistortMode(mode as i32));
+                }
+            }
+        });
+    ui.add(egui::DragValue::new(&mut height));
+    ui.end_row();
 }
 
 pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
@@ -210,5 +236,13 @@ pub fn open_track(ctx: &mut BioTrackerUIContext) {
 pub fn open_video(ctx: &mut BioTrackerUIContext) {
     if let Some(path) = filemenu() {
         ctx.bt.command(Command::OpenVideo(path.to_owned()));
+    }
+}
+
+fn undistort_description(mode: &UndistortMode) -> &str {
+    match mode {
+        UndistortMode::None => "No undistortion",
+        UndistortMode::Image => "Undistort Image",
+        UndistortMode::Poses => "Undistort Poses",
     }
 }

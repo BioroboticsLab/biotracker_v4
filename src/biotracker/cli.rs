@@ -31,4 +31,7 @@ pub struct CommandLineArguments {
     /// Path to robofish track file
     #[arg(long)]
     pub track: Option<String>,
+    /// Force loading of camera settings, this makes it possible to apply undistortion to videos.
+    #[arg(long)]
+    pub force_camera_config: Option<String>,
 }

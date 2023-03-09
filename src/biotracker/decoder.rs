@@ -1,5 +1,6 @@
 use super::{
-    protocol::{Image, VideoInfo},
+    protocol::{CameraConfig, Image, VideoInfo},
+    undistort::UndistortMap,
     DoubleBuffer,
 };
 use anyhow::Result;
@@ -15,6 +16,7 @@ unsafe impl Send for VideoDecoder {}
 unsafe impl Sync for VideoDecoder {}
 pub struct VideoDecoder {
     pub info: VideoInfo,
+    pub camera_config: Option<CameraConfig>,
     playback: Playback,
     buffer_manager: DoubleBuffer,
 }
@@ -30,6 +32,9 @@ struct PylonCamera<'a> {
 
 trait VideoSampler {
     fn get_image(&mut self, mat: &mut Mat) -> Result<()>;
+    fn set_exposure(&mut self, _exposure: f32) -> Result<()> {
+        Err(anyhow::anyhow!("Setting Exposure not supported"))
+    }
     fn seek(&mut self, _target_framenumber: u32) -> Result<()> {
         Err(anyhow::anyhow!("Seek not supported"))
     }
@@ -41,6 +46,15 @@ impl Playback {
             Playback::open_basler(uri, fps)
         } else {
             Playback::open_cv(uri)
+        }
+    }
+
+    fn get_camera_config(uri: &str, configs: &Vec<CameraConfig>) -> Option<CameraConfig> {
+        if uri.starts_with("pylon:///") {
+            let camera_id = &uri[9..];
+            configs.iter().cloned().find(|c| c.id == camera_id)
+        } else {
+            None
         }
     }
 
@@ -164,6 +178,14 @@ impl VideoSampler for PylonCamera<'_> {
         }
         Err(anyhow::anyhow!("Failed to retrieve frame"))
     }
+
+    fn set_exposure(&mut self, exposure: f32) -> Result<()> {
+        self.camera
+            .node_map()
+            .float_node("ExposureTime")?
+            .set_value(exposure)?;
+        Ok(())
+    }
 }
 
 impl VideoSampler for VideoCapture {
@@ -179,21 +201,34 @@ impl VideoSampler for VideoCapture {
 }
 
 impl VideoDecoder {
-    pub fn new(path: String, fps: f64) -> Result<Self> {
-        let (playback, info) = Playback::open(path, fps)?;
+    pub fn new(path: String, fps: f64, configs: &Vec<CameraConfig>) -> Result<Self> {
+        let (mut playback, info) = Playback::open(path.clone(), fps)?;
+        let camera_config = Playback::get_camera_config(&path, configs);
+        if let Some(camera_config) = &camera_config {
+            playback
+                .sampler
+                .set_exposure(camera_config.exposure as f32)?;
+        }
         Ok(Self {
             info,
+            camera_config,
             playback,
             buffer_manager: DoubleBuffer::new(),
         })
     }
 
-    pub fn get_image(&mut self) -> Result<Image> {
+    pub fn get_image(&mut self, undistort_map: Option<UndistortMap>) -> Result<Image> {
         let frame_number = self.playback.frame_number;
         let shared_image = self
             .buffer_manager
             .get_mut(self.info.width, self.info.height, 3)?;
-        self.playback.sampler.get_image(&mut shared_image.mat)?;
+        if let Some(undistort_map) = &undistort_map {
+            let mut distorted_mat = Mat::default();
+            self.playback.sampler.get_image(&mut distorted_mat)?;
+            undistort_map.undistort(&distorted_mat, &mut shared_image.mat)?;
+        } else {
+            self.playback.sampler.get_image(&mut shared_image.mat)?;
+        }
         let image = Image {
             stream_id: "Tracking".to_owned(),
             frame_number,

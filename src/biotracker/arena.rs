@@ -1,4 +1,7 @@
-use super::protocol::{Arena, Features, Point, Pose};
+use super::{
+    protocol::{Arena, Features, Point, Pose},
+    undistort::UndistortMap,
+};
 use anyhow::Result;
 use cv::{core::Point2f, imgproc::point_polygon_test, prelude::*, types::VectorOfPoint2f};
 
@@ -20,18 +23,26 @@ impl ArenaImpl {
         })
     }
 
-    pub fn features_to_poses(&self, features: &mut Features) -> Result<()> {
+    pub fn features_to_poses(
+        &self,
+        features: &mut Features,
+        undistortion: Option<UndistortMap>,
+    ) -> Result<()> {
         if let Some(skeleton) = &features.skeleton {
             for feature in features.features.iter_mut() {
                 let front = &feature.nodes[skeleton.front_index as usize];
                 let center = &feature.nodes[skeleton.center_index as usize];
                 let front = px_to_cm(
-                    &Point2f::new(front.x, front.y),
+                    front.x,
+                    front.y,
                     &self.rectification_transform,
+                    &undistortion,
                 )?;
                 let center = px_to_cm(
-                    &Point2f::new(center.x, center.y),
+                    center.x,
+                    center.y,
                     &self.rectification_transform,
+                    &undistortion,
                 )?;
 
                 let midline = front - center;
@@ -75,16 +86,36 @@ impl Arena {
 
     pub fn tracking_area_contour(&self, rectification_transform: &Mat) -> Result<VectorOfPoint2f> {
         let mut area_contour_cm = VectorOfPoint2f::new();
-        for p_px in to_vector_of_point2f(&self.tracking_area_corners) {
-            let p_cm = px_to_cm(&p_px, rectification_transform)?;
+        for p in &self.tracking_area_corners {
+            let p_cm = px_to_cm(p.x, p.y, rectification_transform, &None)?;
             area_contour_cm.push(p_cm);
         }
         Ok(area_contour_cm)
     }
 }
 
-fn px_to_cm(p: &Point2f, rectification_transform: &Mat) -> Result<Point2f> {
-    let p = Mat::from_slice(&[p.x as f64, p.y as f64, 1.0])?;
+fn px_to_cm(
+    mut x: f32,
+    mut y: f32,
+    rectification_transform: &Mat,
+    undistortion: &Option<UndistortMap>,
+) -> Result<Point2f> {
+    if let Some(undistortion) = undistortion {
+        let p = VectorOfPoint2f::from_iter([Point2f::new(x, y)]);
+        let mut undistorted = VectorOfPoint2f::new();
+        cv::calib3d::undistort_points(
+            &p,
+            &mut undistorted,
+            &undistortion.camera_matrix,
+            &undistortion.distortion_coefficients,
+            &Mat::default(),
+            &undistortion.new_camera_matrix,
+        )?;
+        let undistorted = undistorted.iter().next().unwrap();
+        x = undistorted.x;
+        y = undistorted.y;
+    }
+    let p = Mat::from_slice(&[x as f64, y as f64, 1.0])?;
     let mut rectified = p.clone();
     cv::core::gemm(
         &rectification_transform,

@@ -72,6 +72,7 @@ fn error_message(command: &Command) -> String {
         Command::PlaybackState(state) => format!("Failed to set playback state to {}", state),
         Command::RecordingState(state) => format!("Failed to set recording state to {}", state),
         Command::RealtimeMode(state) => format!("Failed to set realtime mode to {}", state),
+        Command::UndistortMode(mode) => format!("Failed to set undistortion mode to {}", mode),
         Command::TargetFps(fps) => format!("Failed to set target fps to {}", fps),
         Command::Seek(frame) => format!("Failed to seek to frame {}", frame),
         Command::OpenVideo(path) => format!("Failed to open video {}", path),

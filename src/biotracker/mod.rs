@@ -15,6 +15,7 @@ pub mod service;
 pub mod shared_buffer;
 pub mod state;
 pub mod tracking;
+pub mod undistort;
 
 pub use biotracker::Core;
 pub use channel::ChannelRequest;

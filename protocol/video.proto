@@ -16,6 +16,18 @@ enum RecordingState {
   REPLAY = 4;
 }
 
+// When to undistort:
+// None:  Never
+// Image: undistort the image before tracking, it will be visible in the UI and
+//        rendered video, but is expensive
+// Poses: only undistort world poses, it's cheap but the image and
+//        skeletons stay distorted.
+enum UndistortMode {
+  NONE = 0;
+  IMAGE = 1;
+  POSES = 2;
+}
+
 message Image {
   string stream_id = 1;
   uint32 frame_number = 2;
@@ -31,4 +43,12 @@ message VideoInfo {
   uint32 height = 4;
   uint32 frame_count = 2;
   double fps = 5;
+}
+
+message CameraConfig {
+  string id = 1;
+  uint32 exposure = 2;
+  bool fisheye = 3;
+  repeated double distortion_coefficients = 4;
+  repeated double camera_matrix = 5;
 }

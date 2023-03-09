@@ -62,8 +62,8 @@ impl Core {
         let components = self.state.config.components.clone();
         self.state.connections.start_components(components).await?;
 
-        if let Some(video) = &self.args.video {
-            log_error!(self.state.open_video(video.to_owned()));
+        if let Some(video) = self.args.video.clone() {
+            log_error!(self.state.open_video(video, &self.args.force_camera_config));
         }
 
         if let Some(seek) = &self.args.seek {
@@ -242,11 +242,15 @@ impl Core {
             Command::RealtimeMode(wait) => {
                 self.state.experiment.realtime_mode = wait;
             }
+            Command::UndistortMode(mode) => {
+                self.state.set_undistort_mode(mode)?;
+            }
             Command::Seek(frame) => {
                 self.state.seek(frame)?;
             }
             Command::OpenVideo(path) => {
-                self.state.open_video(path)?;
+                self.state
+                    .open_video(path, &self.args.force_camera_config)?;
             }
             Command::OpenTrack(path) => {
                 self.state.open_track(path)?;
@@ -316,8 +320,10 @@ impl Core {
         if let Some(decoder) = &self.state.video_decoder {
             let decoder = decoder.clone();
             if decoder_task.is_none() {
+                let undistortion = self.state.get_undistortion(UndistortMode::Image);
                 *decoder_task = Some(tokio::task::spawn_blocking(move || {
-                    let _ = result_tx.blocking_send(decoder.lock().unwrap().get_image());
+                    let _ =
+                        result_tx.blocking_send(decoder.lock().unwrap().get_image(undistortion));
                 }));
             }
         }

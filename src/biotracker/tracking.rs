@@ -1,4 +1,4 @@
-use super::{arena::ArenaImpl, protocol::*, State};
+use super::{arena::ArenaImpl, protocol::*, undistort::UndistortMap, State};
 use anyhow::Result;
 
 async fn tracking_task(
@@ -8,6 +8,7 @@ async fn tracking_task(
     arena: ArenaImpl,
     last_features: Features,
     entity_ids: Vec<u32>,
+    undistortion: Option<UndistortMap>,
 ) -> Result<(u32, Features)> {
     let frame_number = image.frame_number;
     let detector_request = DetectorRequest {
@@ -20,7 +21,7 @@ async fn tracking_task(
         .into_inner();
     features.frame_number = frame_number;
 
-    arena.features_to_poses(&mut features)?;
+    arena.features_to_poses(&mut features, undistortion)?;
 
     let matcher_request = MatcherRequest {
         features: Some(features.clone()),
@@ -58,9 +59,18 @@ pub fn start_tracking_task(
     let arena = state.arena_impl.clone();
     let tracking_tx = tracking_tx.clone();
     let entity_ids = state.experiment.entity_ids.clone();
+    let undistortion = state.get_undistortion(UndistortMode::Poses);
     *task_handle = Some(tokio::spawn(async move {
-        let result =
-            tracking_task(image, detector, matcher, arena, last_features, entity_ids).await;
+        let result = tracking_task(
+            image,
+            detector,
+            matcher,
+            arena,
+            last_features,
+            entity_ids,
+            undistortion,
+        )
+        .await;
         tracking_tx.send(result).await.unwrap();
     }));
 }
