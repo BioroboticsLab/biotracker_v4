@@ -1,22 +1,56 @@
-use super::protocol::*;
+use super::{protocol::*, python_process::PythonProcess, ComponentConfig, MatcherService};
 use anyhow::Result;
-use std::collections::HashMap;
+use matcher_server::MatcherServer;
+use std::{collections::HashMap, sync::Arc};
+use tokio::task::JoinHandle;
 use tonic::transport::Channel as ClientChannel;
+use tonic::transport::Server;
 
 #[derive(Default)]
 pub struct ComponentConnections {
+    processes: Vec<PythonProcess>,
     connections: HashMap<ServiceType, ComponentConnection>,
+    pending_connections: Vec<JoinHandle<Result<ComponentConnection>>>,
 }
 
 impl ComponentConnections {
-    pub async fn new(configs: Vec<ComponentConfig>) -> Result<Self> {
-        let mut connections = HashMap::new();
+    pub async fn start_components(&mut self, configs: Vec<ComponentConfig>) -> Result<()> {
         for config in configs {
+            self.start_component(config.clone()).await?;
             let service = ServiceType::from_str_name(&config.services[0]).unwrap();
-            let connection = ComponentConnection::new(service, &config).await?;
-            connections.insert(service, connection);
+            let task =
+                tokio::spawn(async move { ComponentConnection::new(service, &config).await });
+            self.pending_connections.push(task);
         }
-        Ok(Self { connections })
+        Ok(())
+    }
+
+    pub async fn stop_components(&mut self) -> Result<()> {
+        for mut process in self.processes.drain(..) {
+            process.stop().await;
+        }
+        self.connections.clear();
+        self.pending_connections.clear();
+        Ok(())
+    }
+
+    pub fn has_pending_connections(&self) -> bool {
+        !self.pending_connections.is_empty()
+    }
+
+    pub async fn update_connections(&mut self) {
+        if let Some(task) = self.pending_connections.last_mut() {
+            match task.await.unwrap() {
+                Ok(connection) => {
+                    self.connections.insert(connection.service_type, connection);
+                    self.pending_connections.pop();
+                }
+                Err(err) => {
+                    self.pending_connections.pop();
+                    log::error!("Failed to connect to component: {}", err);
+                }
+            }
+        }
     }
 
     pub async fn set_config(&mut self, config: ComponentConfig) -> Result<()> {
@@ -32,32 +66,63 @@ impl ComponentConnections {
         ))
     }
 
-    pub fn matcher(&self) -> MatcherClient<ClientChannel> {
-        match &self.get_component(ServiceType::Matcher).client {
-            GrpcClient::Matcher(client) => client.clone(),
-            _ => panic!("Invalid client type"),
+    pub fn matcher(&self) -> Option<MatcherClient<ClientChannel>> {
+        match self.connections.get(&ServiceType::Matcher) {
+            Some(ComponentConnection { client, id, .. }) => match client {
+                GrpcClient::Matcher(client) => Some(client.clone()),
+                _ => panic!("Component {} is not a matcher", id),
+            },
+            None => None,
         }
     }
 
-    pub fn feature_detector(&self) -> FeatureDetectorClient<ClientChannel> {
-        match &self.get_component(ServiceType::FeatureDetector).client {
-            GrpcClient::FeatureDetector(client) => client.clone(),
-            _ => panic!("Invalid client type"),
+    pub fn feature_detector(&self) -> Option<FeatureDetectorClient<ClientChannel>> {
+        match self.connections.get(&ServiceType::FeatureDetector) {
+            Some(ComponentConnection { client, id, .. }) => match client {
+                GrpcClient::FeatureDetector(client) => Some(client.clone()),
+                _ => panic!("Component {} is not a matcher", id),
+            },
+            None => None,
         }
     }
 
-    pub fn track_recorder(&mut self) -> TrackRecorderClient<ClientChannel> {
-        match &self.get_component(ServiceType::TrackRecorder).client {
-            GrpcClient::TrackRecorder(client) => client.clone(),
-            _ => panic!("Invalid client type"),
+    pub fn track_recorder(&self) -> Option<TrackRecorderClient<ClientChannel>> {
+        match self.connections.get(&ServiceType::TrackRecorder) {
+            Some(ComponentConnection { client, id, .. }) => match client {
+                GrpcClient::TrackRecorder(client) => Some(client.clone()),
+                _ => panic!("Component {} is not a recorder", id),
+            },
+            None => None,
         }
     }
 
-    fn get_component(&self, service_type: ServiceType) -> &ComponentConnection {
-        match self.connections.get(&service_type) {
-            Some(connection) => connection,
-            None => panic!("No connection found for service type {:?}", service_type),
-        }
+    async fn start_component(&mut self, config: ComponentConfig) -> Result<()> {
+        let address = config.address.to_owned();
+        if let Some(python_config) = &config.python_config {
+            let process = PythonProcess::start(&config, python_config)?;
+            self.processes.push(process);
+        } else {
+            match config.id.as_str() {
+                "HungarianMatcher" => {
+                    tokio::spawn(async move {
+                        let matcher_service = Arc::new(MatcherService::new());
+                        let matcher_server = MatcherServer::from_arc(matcher_service.clone());
+                        match Server::builder()
+                            .add_service(matcher_server)
+                            .serve(address.parse().expect("Invalid address"))
+                            .await
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                log::warn!("HungarianMatcher failed: {}", e);
+                            }
+                        };
+                    });
+                }
+                _ => panic!("Unknown component {}", config.id),
+            };
+        };
+        Ok(())
     }
 }
 
@@ -68,9 +133,9 @@ pub enum GrpcClient {
 }
 
 pub struct ComponentConnection {
-    pub service_type: ServiceType,
-    pub client: GrpcClient,
-    pub id: String,
+    service_type: ServiceType,
+    client: GrpcClient,
+    id: String,
 }
 
 impl ComponentConnection {

@@ -1,11 +1,9 @@
 use super::{
-    component::ComponentConnections, protocol::*, python_process::ProcessManager,
-    tracking::start_tracking_task, BiotrackerConfig, ChannelRequest, CommandLineArguments,
-    ComponentConfig, MatcherService, RobofishCommander, Service, State,
+    protocol::*, tracking::start_tracking_task, BiotrackerConfig, ChannelRequest,
+    CommandLineArguments, RobofishCommander, Service, State,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bio_tracker_server::BioTrackerServer;
-use matcher_server::MatcherServer;
 use std::sync::Arc;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
@@ -17,7 +15,6 @@ pub struct Core {
     args: Arc<CommandLineArguments>,
     command_rx: Receiver<ChannelRequest<Command, Result<Empty>>>,
     image_rx: Receiver<ChannelRequest<Image, Result<Empty>>>,
-    process_manager: ProcessManager,
     state: State,
     state_rx: Receiver<ChannelRequest<(), Experiment>>,
     robofish_commander_bridge: RobofishCommander,
@@ -55,7 +52,6 @@ impl Core {
             args,
             command_rx,
             image_rx,
-            process_manager: ProcessManager::new(),
             state,
             state_rx,
         })
@@ -63,10 +59,7 @@ impl Core {
 
     async fn init(&mut self) -> Result<()> {
         let components = self.state.config.components.clone();
-        for component in &components {
-            self.start_component(component.clone()).await?;
-        }
-        self.state.connections = ComponentConnections::new(components).await?;
+        self.state.connections.start_components(components).await?;
 
         if let Some(video) = &self.args.video {
             match self.state.open_video(video.to_owned()) {
@@ -107,7 +100,7 @@ impl Core {
                 task.abort();
             }
         }
-        self.process_manager.stop().await?;
+        self.state.connections.stop_components().await?;
         Ok(Empty {})
     }
 
@@ -116,14 +109,10 @@ impl Core {
             Ok(_) => {}
             Err(e) => {
                 log::error!("Failed to initialize: {}", e);
-                // We still initialize the process manager here, so that stdout of failed
-                // components gets logged before shutdown.
-                self.process_manager.run();
                 self.finish(&[]).await?;
                 return Err(e);
             }
         }
-        self.process_manager.run();
 
         let mut fps = self.state.experiment.target_fps;
         let mut fps_interval =
@@ -242,6 +231,8 @@ impl Core {
                 _ = self.robofish_commander_bridge.accept() => {
                     log::info!("Robofish commander connected");
                 }
+                _ = self.state.connections.update_connections(),
+                    if self.state.connections.has_pending_connections() => {}
             }
         }
         Ok(())
@@ -347,6 +338,7 @@ impl Core {
             .state
             .connections
             .track_recorder()
+            .context("TrackRecorder not connected")?
             .load(TrackLoadRequest { load_path: path })
             .await?;
         self.state.tracks = tracks_response.into_inner().tracks;
@@ -361,39 +353,10 @@ impl Core {
         self.state
             .connections
             .track_recorder()
+            .context("TrackRecorder not connected")?
             .save(save_request)
             .await?;
 
-        Ok(())
-    }
-
-    async fn start_component(&mut self, config: ComponentConfig) -> Result<()> {
-        let address = config.address.to_owned();
-        if let Some(python_config) = &config.python_config {
-            self.process_manager
-                .start_python_process(&config, python_config)
-                .await?;
-        } else {
-            match config.id.as_str() {
-                "HungarianMatcher" => {
-                    tokio::spawn(async move {
-                        let matcher_service = Arc::new(MatcherService::new());
-                        let matcher_server = MatcherServer::from_arc(matcher_service.clone());
-                        match Server::builder()
-                            .add_service(matcher_server)
-                            .serve(address.parse().expect("Invalid address"))
-                            .await
-                        {
-                            Ok(_) => {}
-                            Err(e) => {
-                                log::warn!("HungarianMatcher failed: {}", e);
-                            }
-                        };
-                    });
-                }
-                _ => panic!("Unknown component {}", config.id),
-            };
-        };
         Ok(())
     }
 }
