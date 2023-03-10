@@ -234,10 +234,12 @@ impl AnnotatedVideo {
             .offscreen_renderer
             .transform_events(response.rect, events);
         let offscreen_ctx = &self.offscreen_renderer.context.clone();
-        let full_output = offscreen_ctx.run(raw_input, |_| {
-            egui::CentralPanel::default().show(offscreen_ctx, |ui| {
-                self.show_offscreen(ui, ctx);
-            });
+        let full_output = offscreen_ctx.run(raw_input, |egui_ctx| {
+            egui::Area::new("offscreen_area")
+                .fixed_pos(egui::pos2(0.0, 0.0))
+                .show(egui_ctx, |ui| {
+                    self.show_offscreen(ui, ctx);
+                });
         });
         self.offscreen_renderer
             .render(full_output, self.image_updated);
