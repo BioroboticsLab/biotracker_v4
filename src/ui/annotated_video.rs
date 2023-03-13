@@ -227,6 +227,7 @@ impl AnnotatedVideo {
 
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) -> egui::Response {
         self.update_scale(ui);
+        self.annotator.show_onscreen(ui, ctx);
         let response = self.show_onscreen(ui);
         let events = ui.input(|i| i.raw.events.clone());
 
@@ -283,7 +284,7 @@ impl AnnotatedVideo {
         };
         let (response, painter) = ui.allocate_painter(
             egui::Vec2::new(texture.size.width as f32, texture.size.height as f32),
-            egui::Sense::hover(),
+            egui::Sense::click_and_drag(),
         );
 
         let uv = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
@@ -311,7 +312,7 @@ impl AnnotatedVideo {
             }
         }
 
-        self.annotator.show(&response, &painter, ctx);
+        self.annotator.show_offscreen(&response, &painter, ctx);
         if let Some(arena) = ctx.experiment.arena.as_ref() {
             if self.draw_rectification {
                 if let Some(changed_corners) = self.rectification.show(

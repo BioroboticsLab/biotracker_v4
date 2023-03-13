@@ -49,14 +49,14 @@ impl Shape {
                     egui::Rect::from_min_max(*min, *max),
                     egui::Rounding::from(*rounding),
                     egui::Color32::TRANSPARENT,
-                    egui::Stroke::new(1.0, egui::Color32::WHITE),
+                    egui::Stroke::new(4.0, egui::Color32::WHITE),
                 );
             }
             Shape::Arrow(Arrow { center, scale }) => {
                 painter.arrow(
                     *center,
                     egui::vec2(0.0, -1.0) * (*scale as f32),
-                    egui::Stroke::new(1.0, egui::Color32::WHITE),
+                    egui::Stroke::new(4.0, egui::Color32::WHITE),
                 );
             }
         }
@@ -109,32 +109,27 @@ impl AnnotationBuilder {
             ShapeType::RoundedRectangle => self.rectangle(response, std::f32::INFINITY),
             ShapeType::Arrow => self.arrow(response, painter),
         };
-        if finalize {
-            return Some(Annotation {
-                shape: self.shape.take().unwrap(),
-                first_frame: self.start_frame,
-            });
-        } else {
-            if let Some(shape) = &self.shape {
-                shape.draw(painter);
+
+        if let Some(shape) = &self.shape {
+            if finalize {
+                return Some(Annotation {
+                    shape: self.shape.take().unwrap(),
+                    first_frame: self.start_frame,
+                });
             }
-            return None;
+            shape.draw(painter);
         }
+        return None;
     }
 }
 
 impl Annotator {
-    pub fn show(
-        &mut self,
-        response: &egui::Response,
-        painter: &egui::Painter,
-        ctx: &mut BioTrackerUIContext,
-    ) {
+    pub fn show_onscreen(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         egui::Window::new("Add Annotation")
             .resizable(false)
             .collapsible(false)
             .open(&mut ctx.annotator_open)
-            .show(painter.ctx(), |ui| {
+            .show(ui.ctx(), |ui| {
                 self.selected_entity
                     .show(ui, &ctx.experiment.entity_ids, "Attach to Entity");
                 ui.horizontal_top(|ui| {
@@ -157,11 +152,18 @@ impl Annotator {
                         ));
                     }
                     if ui.button("💬").clicked() {
-                        todo!();
+                        log::error!("Text annotation is not implemented");
                     }
                 });
             });
+    }
 
+    pub fn show_offscreen(
+        &mut self,
+        response: &egui::Response,
+        painter: &egui::Painter,
+        ctx: &mut BioTrackerUIContext,
+    ) {
         if let Some(annotation_builder) = &mut self.annotation_builder {
             if let Some(annotation) = annotation_builder.update(response, painter) {
                 self.annotations.push(annotation);
