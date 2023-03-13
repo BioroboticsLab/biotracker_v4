@@ -194,9 +194,9 @@ impl OffscreenRenderer {
         Err(anyhow::anyhow!("No copy buffer"))
     }
 
-    pub fn transform_events(&self, screen_rect: egui::Rect, events: Vec<egui::Event>) -> RawInput {
+    pub fn transform_events(&self, image_rect: egui::Rect, events: Vec<egui::Event>) -> RawInput {
         let transform = egui::emath::RectTransform::from_to(
-            screen_rect,
+            image_rect,
             egui::Rect::from_min_size(
                 egui::pos2(0.0, 0.0),
                 egui::vec2(

@@ -251,15 +251,29 @@ impl AnnotatedVideo {
             / self.offscreen_renderer.texture.size.width as f32;
         let width = ui.available_width() * self.scale;
         let height = width * aspect_ratio;
-        egui::ScrollArea::both()
+        let mut response = egui::ScrollArea::both()
+            .drag_to_scroll(false)
             .id_source("video_area")
             .show(ui, |ui| {
-                ui.add(egui::Image::new(
-                    self.render_texture_id,
-                    egui::vec2(width, height),
-                ))
+                ui.with_layout(
+                    egui::Layout::centered_and_justified(egui::Direction::LeftToRight),
+                    |ui| ui.image(self.render_texture_id, egui::vec2(width, height)),
+                )
+                .inner
             })
-            .inner
+            .inner;
+        let rect = response.rect;
+        // Layout::centered_and_justified uses up all available space, even if the image does not
+        // fill it. We shrink the response rect back to the image rect in this case. This is
+        // done so that we can correctly transform on-screen events to offscreen events for the
+        // offscreen renderer.
+        if rect.width() > width || rect.height() > height {
+            let mut image_rect =
+                egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(width, height));
+            image_rect.set_center(rect.center());
+            response.rect = image_rect;
+        }
+        response
     }
 
     fn show_offscreen(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
