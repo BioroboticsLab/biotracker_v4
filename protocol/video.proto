@@ -47,7 +47,7 @@ message VideoInfo {
 
 message CameraConfig {
   string id = 1;
-  uint32 exposure = 2;
+  double exposure = 2;
   bool fisheye = 3;
   repeated double distortion_coefficients = 4;
   repeated double camera_matrix = 5;

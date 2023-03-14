@@ -32,7 +32,7 @@ struct PylonCamera<'a> {
 
 trait VideoSampler {
     fn get_image(&mut self, mat: &mut Mat) -> Result<()>;
-    fn set_exposure(&mut self, _exposure: f32) -> Result<()> {
+    fn set_exposure(&mut self, _exposure: f64) -> Result<()> {
         Err(anyhow::anyhow!("Setting Exposure not supported"))
     }
     fn seek(&mut self, _target_framenumber: u32) -> Result<()> {
@@ -179,7 +179,7 @@ impl VideoSampler for PylonCamera<'_> {
         Err(anyhow::anyhow!("Failed to retrieve frame"))
     }
 
-    fn set_exposure(&mut self, exposure: f32) -> Result<()> {
+    fn set_exposure(&mut self, exposure: f64) -> Result<()> {
         self.camera
             .node_map()
             .float_node("ExposureTime")?
@@ -205,9 +205,7 @@ impl VideoDecoder {
         let (mut playback, info) = Playback::open(path.clone(), fps)?;
         let camera_config = Playback::get_camera_config(&path, configs);
         if let Some(camera_config) = &camera_config {
-            playback
-                .sampler
-                .set_exposure(camera_config.exposure as f32)?;
+            playback.sampler.set_exposure(camera_config.exposure)?;
         }
         Ok(Self {
             info,
