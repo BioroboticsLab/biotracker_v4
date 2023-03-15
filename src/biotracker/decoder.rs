@@ -171,7 +171,13 @@ impl VideoSampler for PylonCamera<'_> {
                     data_ptr as *mut std::ffi::c_void,
                     cv::core::Mat_AUTO_STEP,
                 )?;
-                assert!(mat.size()? == src_mat.size()?);
+                if mat.size()? != src_mat.size()? {
+                    return Err(anyhow::anyhow!(
+                        "Failed to change color format (size mismatch): source {:?} target: {:?}",
+                        src_mat.size()?,
+                        mat.size()?,
+                    ));
+                }
                 cv::imgproc::cvt_color(&src_mat, mat, cv::imgproc::COLOR_GRAY2BGR, 0)?;
             }
             return Ok(());
@@ -221,7 +227,8 @@ impl VideoDecoder {
             .buffer_manager
             .get_mut(self.info.width, self.info.height, 3)?;
         if let Some(undistort_map) = &undistort_map {
-            let mut distorted_mat = Mat::default();
+            let mut distorted_mat =
+                unsafe { Mat::new_size(shared_image.mat.size()?, cv::core::CV_8UC1)? };
             self.playback.sampler.get_image(&mut distorted_mat)?;
             undistort_map.undistort(&distorted_mat, &mut shared_image.mat)?;
         } else {
