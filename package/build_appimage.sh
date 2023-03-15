@@ -19,3 +19,4 @@ rm -rf $APPDIR || true
   --icon-file resources/biotracker4.png \
   --output appimage \
   --exclude-library 'libwayland-*'
+mv -- *.AppImage biotracker.AppImage
