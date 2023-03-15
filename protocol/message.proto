@@ -94,6 +94,7 @@ service BioTracker {
     rpc get_state(Empty) returns (Experiment) {}
     rpc command(BioTrackerCommand) returns (Empty) {}
     rpc add_image(Image) returns (Empty) {}
+    rpc heartbeat(Empty) returns (Empty) {}
 }
 
 message DetectorRequest {

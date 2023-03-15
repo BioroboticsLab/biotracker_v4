@@ -65,6 +65,7 @@ class TrackRecorder(TrackRecorderBase):
 
 
 async def main():
+    heartbeat()
     addr, port = get_address_and_port()
     server = Server([TrackRecorder()])
     await server.start(addr, port)

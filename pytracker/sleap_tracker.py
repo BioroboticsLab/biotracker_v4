@@ -9,7 +9,6 @@ import os
 import sys
 
 import asyncio
-from grpclib.client import Channel
 from grpclib.server import Server
 
 class SLEAPTracker(FeatureDetectorBase):
@@ -78,6 +77,7 @@ class SLEAPTracker(FeatureDetectorBase):
         self.skeleton = skeleton_descriptor
 
 async def main():
+    heartbeat()
     addr, port = get_address_and_port()
     server = Server([SLEAPTracker()])
     await server.start(addr, port)

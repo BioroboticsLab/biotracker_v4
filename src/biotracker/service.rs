@@ -46,4 +46,8 @@ impl BioTracker for Service {
                 .map_err(|e| Status::invalid_argument(format!("{}", e)))?,
         ))
     }
+
+    async fn heartbeat(&self, _: Request<Empty>) -> Result<Response<Empty>, Status> {
+        Ok(Response::new(Empty {}))
+    }
 }
