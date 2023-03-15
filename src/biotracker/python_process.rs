@@ -12,10 +12,14 @@ pub struct PythonProcess {
 }
 
 impl PythonProcess {
-    pub fn start(config: &ComponentConfig, python_config: &PythonConfig) -> Result<Self> {
+    pub fn start(
+        config: &ComponentConfig,
+        python_config: &PythonConfig,
+        address: String,
+    ) -> Result<Self> {
         let commandline = format!(
             "export BIOTRACKER_COMPONENT_ADDRESS='{}'; . '{}/bin/activate'; exec python3 {} 2>&1",
-            config.address, python_config.venv, python_config.cmd
+            address, python_config.venv, python_config.cmd
         );
         let mut child = Command::new("/bin/sh")
             .arg("-c")

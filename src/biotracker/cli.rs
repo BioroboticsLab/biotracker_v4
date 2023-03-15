@@ -34,4 +34,7 @@ pub struct CommandLineArguments {
     /// Force loading of camera settings, this makes it possible to apply undistortion to videos.
     #[arg(long)]
     pub force_camera_config: Option<String>,
+    /// Start of range of ports which are assigned to components.
+    #[arg(long, default_value_t = 28000)]
+    pub port_range_start: u16,
 }

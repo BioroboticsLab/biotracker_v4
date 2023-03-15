@@ -1,3 +1,4 @@
+use super::port::PortFinder;
 use super::{protocol::*, python_process::PythonProcess, ComponentConfig, MatcherService};
 use anyhow::Result;
 use matcher_server::MatcherServer;
@@ -14,12 +15,19 @@ pub struct ComponentConnections {
 }
 
 impl ComponentConnections {
-    pub async fn start_components(&mut self, configs: Vec<ComponentConfig>) -> Result<()> {
+    pub async fn start_components(
+        &mut self,
+        configs: Vec<ComponentConfig>,
+        port_range_start: u16,
+    ) -> Result<()> {
+        let mut port_finder = PortFinder::new(port_range_start);
         for config in configs {
-            self.start_component(config.clone()).await?;
+            let port = port_finder.next()?;
+            let address = format!("[::1]:{}", port);
+            self.start_component(config.clone(), address).await?;
             let service = ServiceType::from_str_name(&config.services[0]).unwrap();
             let task =
-                tokio::spawn(async move { ComponentConnection::new(service, &config).await });
+                tokio::spawn(async move { ComponentConnection::new(service, &config, port).await });
             self.pending_connections.push(task);
         }
         Ok(())
@@ -100,10 +108,9 @@ impl ComponentConnections {
         }
     }
 
-    async fn start_component(&mut self, config: ComponentConfig) -> Result<()> {
-        let address = config.address.to_owned();
+    async fn start_component(&mut self, config: ComponentConfig, address: String) -> Result<()> {
         if let Some(python_config) = &config.python_config {
-            let process = PythonProcess::start(&config, python_config)?;
+            let process = PythonProcess::start(&config, python_config, address)?;
             self.processes.push(process);
         } else {
             match config.id.as_str() {
@@ -143,8 +150,8 @@ pub struct ComponentConnection {
 }
 
 impl ComponentConnection {
-    async fn new(service_type: ServiceType, config: &ComponentConfig) -> Result<Self> {
-        let address = format!("http://{}", config.address);
+    async fn new(service_type: ServiceType, config: &ComponentConfig, port: u16) -> Result<Self> {
+        let address = format!("http://[::1]:{}", port);
         let channel = ComponentConnection::poll_connect(&address).await?;
         let client = match service_type {
             ServiceType::Matcher => Ok(GrpcClient::Matcher(MatcherClient::new(channel))),

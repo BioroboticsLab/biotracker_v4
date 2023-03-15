@@ -8,6 +8,7 @@ pub mod encoder;
 pub mod logger;
 pub mod matcher;
 pub mod metric;
+pub mod port;
 pub mod protocol;
 pub mod python_process;
 pub mod robofish_commander;

@@ -60,7 +60,11 @@ impl Core {
 
     async fn init(&mut self) -> Result<()> {
         let components = self.state.config.components.clone();
-        self.state.connections.start_components(components).await?;
+        let port_range_start = self.args.port_range_start;
+        self.state
+            .connections
+            .start_components(components, port_range_start)
+            .await?;
 
         if let Some(video) = self.args.video.clone() {
             log_error!(self.state.open_video(video, &self.args.force_camera_config));

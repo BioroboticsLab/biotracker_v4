@@ -136,7 +136,6 @@ message PythonConfig {
 message ComponentConfig {
     string id = 2;
     string config_json = 1;
-    string address = 4;
     repeated string services = 3;
     optional PythonConfig python_config = 5;
 }
