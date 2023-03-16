@@ -44,6 +44,7 @@ message BioTrackerCommand {
         uint32 seek = 3;
         string open_video = 4;
         string open_track = 11;
+        string save_track = 17;
         RecordingConfig initialize_recording = 7;
         Empty add_entity = 5;
         uint32 remove_entity = 6;

@@ -77,6 +77,7 @@ fn error_message(command: &Command) -> String {
         Command::Seek(frame) => format!("Failed to seek to frame {}", frame),
         Command::OpenVideo(path) => format!("Failed to open video {}", path),
         Command::OpenTrack(path) => format!("Failed to open track {}", path),
+        Command::SaveTrack(path) => format!("Failed to save track {}", path),
         Command::InitializeRecording(config) => {
             format!("Failed to initialize recording with config {:?}", config)
         }

@@ -164,6 +164,23 @@ pub fn arena_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     }
 }
 
+pub fn recording_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
+    ui.label("Recorded image");
+    egui::ComboBox::from_id_source("image_streams")
+        .selected_text(ctx.recording_image_id.clone())
+        .show_ui(ui, |ui| {
+            for image in ["Tracking", "Annotated"] {
+                if ui
+                    .selectable_label(*image == *ctx.recording_image_id, image)
+                    .clicked()
+                {
+                    ctx.recording_image_id = image.to_owned();
+                }
+            }
+        });
+    ui.end_row();
+}
+
 pub fn settings_window(
     ui: &mut egui::Ui,
     ctx: &mut BioTrackerUIContext,
@@ -195,6 +212,11 @@ pub fn settings_window(
                 ui.end_row();
                 annotation_settings(ui, components);
 
+                ui.heading("Recording");
+                ui.separator();
+                ui.end_row();
+                recording_settings(ui, ctx);
+
                 for component in ctx.experiment.components.iter_mut() {
                     if component.id != "HungarianMatcher" {
                         continue;
@@ -214,15 +236,16 @@ pub fn settings_window(
     ctx.experiment_setup_open = open;
 }
 
+pub fn foldermenu() -> Option<String> {
+    match rfd::FileDialog::new().pick_folder() {
+        Some(pathbuf) => pathbuf.to_str().map(|s| s.to_string()),
+        None => None,
+    }
+}
+
 pub fn filemenu() -> Option<String> {
     match rfd::FileDialog::new().pick_file() {
-        Some(pathbuf) => Some(
-            pathbuf
-                .to_str()
-                .ok_or(anyhow::anyhow!("Failed to get string from pathbuf"))
-                .unwrap()
-                .to_owned(),
-        ),
+        Some(pathbuf) => pathbuf.to_str().map(|s| s.to_string()),
         None => None,
     }
 }

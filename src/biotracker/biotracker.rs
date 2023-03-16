@@ -178,10 +178,8 @@ impl Core {
                         Ok(image) => {
                             self.state.handle_image_result(image.clone());
                             if tracking_task.is_none() {
-                                let switch_request = self.state.switch_request.take();
                                 start_tracking_task(
                                     &self.state,
-                                    switch_request,
                                     &mut tracking_task,
                                     &tracking_tx,
                                     &image);
@@ -207,10 +205,8 @@ impl Core {
                             self.state.handle_tracking_result(frame_number, features);
                             if let Some(image) =  &self.state.experiment.last_image {
                                 if image.frame_number != frame_number {
-                                    let switch_request = self.state.switch_request.take();
                                     start_tracking_task(
                                         &self.state,
-                                        switch_request,
                                         &mut tracking_task,
                                         &tracking_tx,
                                         &image);
@@ -258,6 +254,9 @@ impl Core {
             }
             Command::OpenTrack(path) => {
                 self.state.open_track(path)?;
+            }
+            Command::SaveTrack(path) => {
+                self.state.save_track(&path)?;
             }
             Command::InitializeRecording(config) => {
                 self.state.initialize_recording(config)?;
@@ -338,7 +337,14 @@ impl Core {
             experiment: Some(self.state.experiment.clone()),
             track: Some(self.state.track.clone()),
         };
-        log_error!(self.state.save_track());
+        let recording_config = self
+            .state
+            .experiment
+            .recording_config
+            .as_ref()
+            .context("Missing recording config")?;
+        let track_path = format!("{}.json", recording_config.base_path);
+        log_error!(self.state.save_track(&track_path));
         self.state
             .connections
             .track_recorder()

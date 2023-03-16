@@ -49,7 +49,7 @@ class TrackRecorder(TrackRecorderBase):
                     continue
                 pose = feature.pose
                 pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
-                last_seen = entity_last_seen.get(feature.id, track.start_frame - 1)
+                last_seen = entity_last_seen.get(feature.id, -1)
                 if feature.id not in np_entities:
                     np_entities[feature.id] = []
                 if frame_number > last_seen + 1:

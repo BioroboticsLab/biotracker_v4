@@ -34,7 +34,6 @@ async fn tracking_task(
 
 pub fn start_tracking_task(
     state: &State,
-    entity_switch_request: Option<EntityIdSwitch>,
     task_handle: &mut Option<tokio::task::JoinHandle<()>>,
     tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features)>>,
     image: &Image,
@@ -49,13 +48,11 @@ pub fn start_tracking_task(
         return;
     }
     let (detector, matcher) = (detector.unwrap(), matcher.unwrap());
-    let mut last_features = state
+    let last_features = state
         .experiment
         .last_features
         .clone()
         .expect("last_features is None");
-    switch_entity_ids(&mut last_features, entity_switch_request);
-
     let arena = state.arena_impl.clone();
     let tracking_tx = tracking_tx.clone();
     let entity_ids = state.experiment.entity_ids.clone();
@@ -75,22 +72,14 @@ pub fn start_tracking_task(
     }));
 }
 
-fn switch_entity_ids(features: &mut Features, switch_request: Option<EntityIdSwitch>) {
-    if let Some(switch_request) = switch_request {
-        let (first_idx, second_idx) = (
-            features
-                .features
-                .iter()
-                .position(|f| f.id == Some(switch_request.id1)),
-            features
-                .features
-                .iter()
-                .position(|f| f.id == Some(switch_request.id2)),
-        );
-
-        if let (Some(first_idx), Some(second_idx)) = (first_idx, second_idx) {
-            features.features[first_idx].id = Some(switch_request.id2);
-            features.features[second_idx].id = Some(switch_request.id1);
-        }
+impl Features {
+    pub fn switch_ids(&mut self, switch_request: &EntityIdSwitch) {
+        self.features.iter_mut().for_each(|f| {
+            if f.id == Some(switch_request.id1) {
+                f.id = Some(switch_request.id2);
+            } else if f.id == Some(switch_request.id2) {
+                f.id = Some(switch_request.id1);
+            }
+        });
     }
 }

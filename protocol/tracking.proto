@@ -23,7 +23,6 @@ message Features {
 }
 
 message Track {
-  uint32 start_frame = 1;
   // map from frame number to features
   map<uint32, Features> features = 2;
 }

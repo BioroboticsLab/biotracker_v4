@@ -19,6 +19,7 @@ pub struct State {
     pub metrics: Metrics,
     pub arena_impl: ArenaImpl,
     pub connections: ComponentConnections,
+    recording_start_frame: u32,
     entity_counter: u32,
 }
 
@@ -70,11 +71,19 @@ impl State {
         }
     }
 
-    pub fn handle_tracking_result(&mut self, frame_number: u32, features: Features) {
+    pub fn handle_tracking_result(&mut self, frame_number: u32, mut features: Features) {
         let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
         tracking_metrics.tracking_frame_time = self.metrics.tracking_frame_time.update();
         tracking_metrics.detected_features = features.features.len() as u32;
-        self.track.features.insert(frame_number, features.clone());
+        if let Some(switch_request) = self.switch_request.take() {
+            features.switch_ids(&switch_request);
+        }
+        // Adjust the track frame numbers to start at 0
+        let recording_frame_number = frame_number - self.recording_start_frame;
+        features.frame_number = recording_frame_number;
+        self.track
+            .features
+            .insert(recording_frame_number, features.clone());
         self.experiment.last_features = Some(features);
     }
 
@@ -122,19 +131,12 @@ impl State {
         let file = std::fs::File::open(path)?;
         let reader = std::io::BufReader::new(file);
         let track: Track = serde_json::from_reader(reader)?;
-        self.seek(track.start_frame)?;
         self.track = track;
         self.experiment.recording_state = RecordingState::Replay as i32;
         Ok(())
     }
 
-    pub fn save_track(&mut self) -> Result<()> {
-        let recording_config = self
-            .experiment
-            .recording_config
-            .as_ref()
-            .context("Missing recording config")?;
-        let path = std::path::PathBuf::from(&recording_config.base_path).with_extension("json");
+    pub fn save_track(&mut self, path: &str) -> Result<()> {
         let file = std::fs::File::create(path)?;
         let writer = std::io::BufWriter::new(file);
         serde_json::to_writer(writer, &self.track)?;
@@ -158,21 +160,42 @@ impl State {
         if self.switch_request.is_some() {
             return Err(anyhow::anyhow!("Entity switch pending"));
         }
-        self.switch_request = Some(request);
+        if self.experiment.recording_state == RecordingState::Replay as i32 {
+            // If we are in replay mode, we immediately apply the id switch for all future features
+            let last_features_frame = match self.experiment.last_features {
+                Some(ref features) => features.frame_number,
+                None => 0,
+            };
+            self.track
+                .features
+                .iter_mut()
+                .for_each(|(frame_number, features)| {
+                    if *frame_number >= last_features_frame {
+                        features.switch_ids(&request);
+                    }
+                });
+        } else {
+            // If we are in tracking mode, we cannot apply the switch immediately, because there
+            // is a copy of the last features in the tracking task. We save the request to be
+            // applied by the tracking task.
+            self.switch_request = Some(request);
+        }
+        Ok(())
+    }
+
+    pub fn start_recording(&mut self) -> Result<()> {
+        self.recording_start_frame = match &self.experiment.last_image {
+            Some(image) => image.frame_number,
+            None => 0,
+        };
+        self.track = Track::default();
         Ok(())
     }
 
     pub fn set_recording_state(&mut self, recording_state: i32) -> Result<()> {
         match RecordingState::from_i32(recording_state) {
-            Some(RecordingState::Recording) | Some(RecordingState::Initial) => {
-                let start_frame = match &self.experiment.last_image {
-                    Some(image) => image.frame_number,
-                    None => 0,
-                };
-                self.track = Track {
-                    start_frame,
-                    ..Default::default()
-                };
+            Some(RecordingState::Recording) => {
+                self.start_recording()?;
             }
             Some(RecordingState::Finished) => {
                 self.video_encoder = None;

@@ -32,6 +32,7 @@ pub struct BioTrackerUIContext {
     pub entity_switcher_open: bool,
     pub annotator_open: bool,
     pub experiment_setup_open: bool,
+    pub recording_image_id: String,
 }
 
 pub struct BioTrackerUIComponents {
@@ -86,6 +87,7 @@ impl BioTrackerUI {
                 entity_switcher_open: false,
                 annotator_open: false,
                 experiment_setup_open: false,
+                recording_image_id: "Tracking".to_string(),
             },
             components: BioTrackerUIComponents {
                 video_view: AnnotatedVideo::new(render_state),

@@ -23,6 +23,17 @@ impl BiotrackerConfig {
     }
 }
 
+fn from_f32_or_null<'de, D>(deserializer: D) -> Result<f32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: f32 = match serde::Deserialize::deserialize(deserializer) {
+        Ok(x) => x,
+        Err(_) => std::f32::NAN,
+    };
+    Ok(s)
+}
+
 fn from_map<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: serde::Deserializer<'de>,
