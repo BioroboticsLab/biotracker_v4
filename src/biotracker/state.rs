@@ -1,4 +1,5 @@
 use super::component::ComponentConnections;
+use super::tracking::TrackingResult;
 use super::undistort::UndistortMap;
 use super::{
     arena::ArenaImpl, metric::DurationMetric, protocol::*, BiotrackerConfig, VideoDecoder,
@@ -71,7 +72,13 @@ impl State {
         }
     }
 
-    pub fn handle_tracking_result(&mut self, frame_number: u32, mut features: Features) {
+    pub fn handle_tracking_result(&mut self, result: TrackingResult) {
+        let TrackingResult {
+            frame_number,
+            mut features,
+            skeleton,
+        } = result;
+        self.experiment.skeleton = Some(skeleton.clone());
         let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
         tracking_metrics.tracking_frame_time = self.metrics.tracking_frame_time.update();
         tracking_metrics.detected_features = features.features.len() as u32;
@@ -84,7 +91,7 @@ impl State {
         self.track
             .features
             .insert(recording_frame_number, features.clone());
-        self.experiment.last_features = Some(features);
+        self.experiment.last_features = Some(features.clone());
     }
 
     pub fn open_video(
@@ -131,12 +138,14 @@ impl State {
         let file = std::fs::File::open(path)?;
         let reader = std::io::BufReader::new(file);
         let track: Track = serde_json::from_reader(reader)?;
-        self.track = track;
+        self.experiment.skeleton = track.skeleton.clone();
         self.experiment.recording_state = RecordingState::Replay as i32;
+        self.track = track;
         Ok(())
     }
 
     pub fn save_track(&mut self, path: &str) -> Result<()> {
+        self.track.skeleton = self.experiment.skeleton.clone();
         let file = std::fs::File::create(path)?;
         let writer = std::io::BufWriter::new(file);
         serde_json::to_writer(writer, &self.track)?;

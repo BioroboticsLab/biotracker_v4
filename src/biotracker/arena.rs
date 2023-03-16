@@ -1,5 +1,5 @@
 use super::{
-    protocol::{Arena, Features, Point, Pose},
+    protocol::{Arena, Features, Point, Pose, SkeletonDescriptor},
     undistort::UndistortMap,
 };
 use anyhow::Result;
@@ -26,42 +26,40 @@ impl ArenaImpl {
     pub fn features_to_poses(
         &self,
         features: &mut Features,
+        skeleton: &SkeletonDescriptor,
         undistortion: Option<UndistortMap>,
     ) -> Result<()> {
-        if let Some(skeleton) = &features.skeleton {
-            for feature in features.features.iter_mut() {
-                let front = &feature.nodes[skeleton.front_index as usize];
-                let center = &feature.nodes[skeleton.center_index as usize];
-                let front = px_to_cm(
-                    front.x,
-                    front.y,
-                    &self.rectification_transform,
-                    &undistortion,
-                )?;
-                let center = px_to_cm(
-                    center.x,
-                    center.y,
-                    &self.rectification_transform,
-                    &undistortion,
-                )?;
+        for feature in features.features.iter_mut() {
+            let front = &feature.nodes[skeleton.front_index as usize];
+            let center = &feature.nodes[skeleton.center_index as usize];
+            let front = px_to_cm(
+                front.x,
+                front.y,
+                &self.rectification_transform,
+                &undistortion,
+            )?;
+            let center = px_to_cm(
+                center.x,
+                center.y,
+                &self.rectification_transform,
+                &undistortion,
+            )?;
 
-                let midline = front - center;
-                let direction = midline / midline.norm() as f32;
-                let mut orientation_rad =
-                    direction.x.atan2(direction.y) + std::f32::consts::PI / 2.0;
-                if orientation_rad.is_nan() {
-                    // happens if center == front
-                    orientation_rad = 0.0;
-                }
-                let out_of_bounds =
-                    point_polygon_test(&self.tracking_area_contour, center, false)? < 0.0;
-                feature.out_of_bounds = out_of_bounds;
-                feature.pose = Some(Pose {
-                    orientation_rad,
-                    x_cm: center.x,
-                    y_cm: center.y,
-                });
+            let midline = front - center;
+            let direction = midline / midline.norm() as f32;
+            let mut orientation_rad = direction.x.atan2(direction.y) + std::f32::consts::PI / 2.0;
+            if orientation_rad.is_nan() {
+                // happens if center == front
+                orientation_rad = 0.0;
             }
+            let out_of_bounds =
+                point_polygon_test(&self.tracking_area_contour, center, false)? < 0.0;
+            feature.out_of_bounds = out_of_bounds;
+            feature.pose = Some(Pose {
+                orientation_rad,
+                x_cm: center.x,
+                y_cm: center.y,
+            });
         }
         Ok(())
     }

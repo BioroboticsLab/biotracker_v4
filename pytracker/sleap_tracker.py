@@ -12,7 +12,7 @@ import asyncio
 from grpclib.server import Server
 
 class SLEAPTracker(FeatureDetectorBase):
-    async def detect_features(self, request: "DetectorRequest") -> "Features":
+    async def detect_features(self, request: "DetectorRequest") -> "DetectorResponse":
         try:
             shared_img = SharedImage(request.image)
         except FileNotFoundError as e:
@@ -22,7 +22,7 @@ class SLEAPTracker(FeatureDetectorBase):
         grayscale = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
         prediction = self.model(np_array)
-        features = Features(skeleton=self.skeleton)
+        features = Features()
         for peaks, vals, instance_score in zip(prediction['instance_peaks'].numpy()[0],
                                                prediction['instance_peak_vals'].numpy()[0],
                                                prediction['centroid_vals'].numpy()[0]):
@@ -33,7 +33,7 @@ class SLEAPTracker(FeatureDetectorBase):
                 node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
                 feature.nodes.append(node)
             features.features.append(feature)
-        return features
+        return DetectorResponse(features=features, skeleton=self.skeleton)
 
     async def set_config(
         self, component_configuration: "ComponentConfig"
@@ -73,7 +73,8 @@ class SLEAPTracker(FeatureDetectorBase):
         skeleton_descriptor = SkeletonDescriptor(edges=edges,
                                                  node_names=node_names,
                                                  front_index=front_node_index,
-                                                 center_index=center_node_index)
+                                                 center_index=center_node_index,
+                                                 id=0)
         self.skeleton = skeleton_descriptor
 
 async def main():

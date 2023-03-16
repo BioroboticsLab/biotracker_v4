@@ -79,6 +79,7 @@ message Experiment {
     optional Image last_image = 9;
     optional Features last_features = 11;
     repeated uint32 entity_ids = 13;
+    optional SkeletonDescriptor skeleton = 18;
     optional Transform rectification = 15;
     repeated ComponentConfig components = 16;
 }
@@ -103,9 +104,14 @@ message DetectorRequest {
     Arena arena = 2;
 }
 
+message DetectorResponse {
+    Features features = 1;
+    SkeletonDescriptor skeleton = 2;
+}
+
 service FeatureDetector {
     rpc set_config(ComponentConfig) returns (Empty) {}
-    rpc detect_features(DetectorRequest) returns (Features);
+    rpc detect_features(DetectorRequest) returns (DetectorResponse) {}
 }
 
 message MatcherRequest {

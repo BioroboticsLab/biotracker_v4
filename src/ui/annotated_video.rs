@@ -301,12 +301,18 @@ impl AnnotatedVideo {
                         true => egui::Color32::RED,
                         false => egui::Color32::GREEN,
                     };
-                    self.paint_feature(None, &painter, feature, &features.skeleton, color);
+                    self.paint_feature(None, &painter, feature, &ctx.experiment.skeleton, color);
                 }
                 if let Some(id) = feature.id {
                     if self.draw_entities {
                         let color = ctx.color_palette.pick(id);
-                        self.paint_feature(Some(id), &painter, feature, &features.skeleton, color);
+                        self.paint_feature(
+                            Some(id),
+                            &painter,
+                            feature,
+                            &ctx.experiment.skeleton,
+                            color,
+                        );
                     }
                 }
             }

@@ -18,11 +18,11 @@ message Feature {
 
 message Features {
   repeated Feature features = 2;
-  SkeletonDescriptor skeleton = 3;
-  uint32 frame_number = 4;
+  uint32 frame_number = 1;
 }
 
 message Track {
+  SkeletonDescriptor skeleton = 1;
   // map from frame number to features
   map<uint32, Features> features = 2;
 }
@@ -39,6 +39,7 @@ message SkeletonEdge {
 }
 
 message SkeletonDescriptor {
+  uint32 id = 5;
   repeated SkeletonEdge edges = 1;
   repeated string node_names = 2;
   uint32 front_index = 3;

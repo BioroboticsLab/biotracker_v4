@@ -1,4 +1,5 @@
-use super::protocol::{Arena, Features};
+use super::tracking::TrackingResult;
+use super::State;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -26,20 +27,16 @@ impl RobofishCommander {
         Ok(())
     }
 
-    pub async fn send(
-        &mut self,
-        features: &Features,
-        arena: &Option<Arena>,
-        frame_number: u32,
-        fps: f32,
-    ) -> Result<()> {
+    pub async fn send(&mut self, state: &State, result: &TrackingResult) -> Result<()> {
+        let frame_number = result.frame_number;
+        let fps = state.experiment.target_fps;
         let mut drop_connections = vec![];
         for (addr, stream) in self.streams.iter_mut() {
-            let fishcount = features.features.len();
+            let fishcount = result.features.features.len();
             let mut msg = format!("frame:{frame_number};polygon:0;fishcount:{fishcount};");
-            let arena = arena.as_ref().expect("Arena not set");
+            let arena = state.experiment.arena.as_ref().expect("Arena not set");
 
-            for feature in &features.features {
+            for feature in &result.features.features {
                 if let Some(id) = feature.id {
                     if let Some(pose) = &feature.pose {
                         let orientation_deg = pose.orientation_rad * 180.0 / std::f32::consts::PI;

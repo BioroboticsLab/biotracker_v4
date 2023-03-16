@@ -1,5 +1,12 @@
 use super::{arena::ArenaImpl, protocol::*, undistort::UndistortMap, State};
-use anyhow::Result;
+use anyhow::{Context, Result};
+
+#[derive(Debug)]
+pub struct TrackingResult {
+    pub frame_number: u32,
+    pub features: Features,
+    pub skeleton: SkeletonDescriptor,
+}
 
 async fn tracking_task(
     image: Image,
@@ -9,19 +16,24 @@ async fn tracking_task(
     last_features: Features,
     entity_ids: Vec<u32>,
     undistortion: Option<UndistortMap>,
-) -> Result<(u32, Features)> {
+) -> Result<TrackingResult> {
     let frame_number = image.frame_number;
     let detector_request = DetectorRequest {
         image: Some(image),
         arena: Some(arena.arena.clone()),
     };
-    let mut features = detector
+    let response = detector
         .detect_features(detector_request)
         .await?
         .into_inner();
+    let mut features = response
+        .features
+        .context("Received DetectorResponse without features")?;
+    let skeleton = response
+        .skeleton
+        .context("Received DetectorResponse without skeleton")?;
     features.frame_number = frame_number;
-
-    arena.features_to_poses(&mut features, undistortion)?;
+    arena.features_to_poses(&mut features, &skeleton, undistortion)?;
 
     let matcher_request = MatcherRequest {
         features: Some(features.clone()),
@@ -29,13 +41,17 @@ async fn tracking_task(
         entity_ids,
     };
     features = matcher.match_features(matcher_request).await?.into_inner();
-    Ok((frame_number, features))
+    Ok(TrackingResult {
+        frame_number,
+        features,
+        skeleton,
+    })
 }
 
 pub fn start_tracking_task(
     state: &State,
     task_handle: &mut Option<tokio::task::JoinHandle<()>>,
-    tracking_tx: &tokio::sync::mpsc::Sender<Result<(u32, Features)>>,
+    tracking_tx: &tokio::sync::mpsc::Sender<Result<TrackingResult>>,
     image: &Image,
 ) {
     if state.experiment.recording_state == RecordingState::Replay as i32 {
@@ -70,16 +86,4 @@ pub fn start_tracking_task(
         .await;
         tracking_tx.send(result).await.unwrap();
     }));
-}
-
-impl Features {
-    pub fn switch_ids(&mut self, switch_request: &EntityIdSwitch) {
-        self.features.iter_mut().for_each(|f| {
-            if f.id == Some(switch_request.id1) {
-                f.id = Some(switch_request.id2);
-            } else if f.id == Some(switch_request.id2) {
-                f.id = Some(switch_request.id1);
-            }
-        });
-    }
 }

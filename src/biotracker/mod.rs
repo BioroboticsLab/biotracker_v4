@@ -5,6 +5,7 @@ pub mod cli;
 pub mod component;
 pub mod decoder;
 pub mod encoder;
+pub mod features;
 pub mod logger;
 pub mod matcher;
 pub mod metric;
