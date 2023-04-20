@@ -44,7 +44,7 @@ impl State {
         let components = config.components.clone();
         Self {
             experiment: Experiment {
-                target_fps: 25.0,
+                target_fps: 30.0,
                 arena: Some(arena.clone()),
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
