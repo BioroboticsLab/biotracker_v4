@@ -1,8 +1,9 @@
+use super::observer_client::ObserverClient;
 use super::port::PortFinder;
 use super::{protocol::*, python_process::PythonProcess, ComponentConfig, MatcherService};
 use anyhow::Result;
 use matcher_server::MatcherServer;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tonic::transport::Channel as ClientChannel;
 use tonic::transport::Server;
@@ -10,7 +11,7 @@ use tonic::transport::Server;
 #[derive(Default)]
 pub struct ComponentConnections {
     processes: Vec<PythonProcess>,
-    connections: HashMap<ServiceType, ComponentConnection>,
+    connections: Vec<ComponentConnection>,
     pending_connections: Vec<JoinHandle<Result<ComponentConnection>>>,
 }
 
@@ -51,7 +52,7 @@ impl ComponentConnections {
             match task.await.unwrap() {
                 Ok(connection) => {
                     let service_type = connection.service_type;
-                    self.connections.insert(connection.service_type, connection);
+                    self.connections.push(connection);
                     self.pending_connections.pop();
                     return Some(service_type);
                 }
@@ -66,7 +67,7 @@ impl ComponentConnections {
     }
 
     pub async fn set_config(&mut self, config: ComponentConfig) -> Result<()> {
-        for connection in self.connections.values_mut() {
+        for connection in &mut self.connections {
             if connection.id == config.id {
                 connection.set_config(config).await?;
                 return Ok(());
@@ -79,33 +80,34 @@ impl ComponentConnections {
     }
 
     pub fn matcher(&self) -> Option<MatcherClient<ClientChannel>> {
-        match self.connections.get(&ServiceType::Matcher) {
-            Some(ComponentConnection { client, id, .. }) => match client {
-                GrpcClient::Matcher(client) => Some(client.clone()),
-                _ => panic!("Component {} is not a matcher", id),
-            },
-            None => None,
+        for connection in &self.connections {
+            match connection.client {
+                GrpcClient::Matcher(ref client) => return Some(client.clone()),
+                _ => {}
+            }
         }
+        None
     }
 
     pub fn feature_detector(&self) -> Option<FeatureDetectorClient<ClientChannel>> {
-        match self.connections.get(&ServiceType::FeatureDetector) {
-            Some(ComponentConnection { client, id, .. }) => match client {
-                GrpcClient::FeatureDetector(client) => Some(client.clone()),
-                _ => panic!("Component {} is not a matcher", id),
-            },
-            None => None,
+        for connection in &self.connections {
+            match connection.client {
+                GrpcClient::FeatureDetector(ref client) => return Some(client.clone()),
+                _ => {}
+            }
         }
+        None
     }
 
-    pub fn track_recorder(&self) -> Option<TrackRecorderClient<ClientChannel>> {
-        match self.connections.get(&ServiceType::TrackRecorder) {
-            Some(ComponentConnection { client, id, .. }) => match client {
-                GrpcClient::TrackRecorder(client) => Some(client.clone()),
-                _ => panic!("Component {} is not a recorder", id),
-            },
-            None => None,
+    pub fn observers(&self) -> Vec<ObserverClient<ClientChannel>> {
+        let mut clients = vec![];
+        for connection in &self.connections {
+            match connection.client {
+                GrpcClient::Observer(ref client) => clients.push(client.clone()),
+                _ => {}
+            }
         }
+        clients
     }
 
     async fn start_component(&mut self, config: ComponentConfig, address: String) -> Result<()> {
@@ -140,7 +142,7 @@ impl ComponentConnections {
 pub enum GrpcClient {
     Matcher(MatcherClient<ClientChannel>),
     FeatureDetector(FeatureDetectorClient<ClientChannel>),
-    TrackRecorder(TrackRecorderClient<ClientChannel>),
+    Observer(ObserverClient<ClientChannel>),
 }
 
 pub struct ComponentConnection {
@@ -158,9 +160,7 @@ impl ComponentConnection {
             ServiceType::FeatureDetector => Ok(GrpcClient::FeatureDetector(
                 FeatureDetectorClient::new(channel),
             )),
-            ServiceType::TrackRecorder => {
-                Ok(GrpcClient::TrackRecorder(TrackRecorderClient::new(channel)))
-            }
+            ServiceType::Observer => Ok(GrpcClient::Observer(ObserverClient::new(channel))),
             ServiceType::BiotrackerCore => Err(anyhow::anyhow!("Invalid service name")),
         }?;
         let mut result = Self {
@@ -193,7 +193,7 @@ impl ComponentConnection {
             GrpcClient::FeatureDetector(client) => {
                 client.set_config(config).await?;
             }
-            GrpcClient::TrackRecorder(client) => {
+            GrpcClient::Observer(client) => {
                 client.set_config(config).await?;
             }
         };

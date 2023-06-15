@@ -10,7 +10,7 @@ enum ServiceType {
     BIOTRACKER_CORE = 0;
     FEATURE_DETECTOR = 1;
     MATCHER = 2;
-    TRACK_RECORDER = 3;
+    OBSERVER = 4;
 }
 
 message Empty {}
@@ -125,14 +125,9 @@ service Matcher {
     rpc match_features(MatcherRequest) returns (Features);
 }
 
-message TrackSaveRequest {
-    Experiment experiment = 1;
-    Track track = 12;
-}
-
-service TrackRecorder {
+service Observer {
     rpc set_config(ComponentConfig) returns (Empty) {}
-    rpc save(TrackSaveRequest) returns (Empty);
+    rpc update(Experiment) returns (Empty);
 }
 
 message PythonConfig {

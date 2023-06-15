@@ -9,6 +9,7 @@ pub mod features;
 pub mod logger;
 pub mod matcher;
 pub mod metric;
+pub mod observer;
 pub mod port;
 pub mod protocol;
 pub mod python_process;

@@ -13,36 +13,47 @@ import asyncio
 from grpclib.client import Channel
 from grpclib.server import Server
 
-class TrackRecorder(TrackRecorderBase):
+class TrackRecorder(ObserverBase):
+    def __init__(self):
+        self.recording_state = RecordingState.INITIAL
+
     async def set_config(
         self, component_configuration: "ComponentConfiguration"
     ) -> "Empty":
         return Empty()
 
-    async def save(self, track_save_request: "TrackSaveRequest") -> "Empty":
-        track = track_save_request.track
-        filename = track_save_request.experiment.recording_config.base_path
-        experiment = track_save_request.experiment
+    async def update(self, experiment: "Experiment") -> "Empty":
+        if experiment.recording_state != self.recording_state:
+            if experiment.recording_state == RecordingState.RECORDING:
+                await self.start_recording(experiment)
+            elif experiment.recording_state == RecordingState.FINISHED:
+                await self.stop_recording(experiment)
+            self.recording_state = experiment.recording_state
+        if self.recording_state == RecordingState.RECORDING:
+            features = experiment.last_features
+            self.track.features[features.frame_number] = features
+        return Empty()
+
+
+    async def start_recording(self, experiment):
+        self.track = Track(features={},skeleton=experiment.skeleton)
+        self.filename = experiment.recording_config.base_path + '.hdf5'
         self.world_size_cm = (experiment.arena.width_cm,
                               experiment.arena.height_cm)
         self.hz = experiment.target_fps
-        recorded_entities = {}
-        loop.run_in_executor(None, lambda: self.save_track(filename, track))
-        return Empty()
 
-    def save_track(self, filename, track):
-        path = filename + '.hdf5'
-        with robofish.io.File(filename + '.hdf5', mode='w',
+    async def stop_recording(self, experiment):
+        with robofish.io.File(self.filename, mode='w',
                               world_size_cm=self.world_size_cm,
                               frequency_hz=self.hz) as f:
-            for id, poses in self.entities_to_numpy(track).items():
+            for id, poses in self.entities_to_numpy().items():
                 f.create_entity(category='organism', name=f'fish_{id}', poses=poses)
 
-    def entities_to_numpy(self, track):
+    def entities_to_numpy(self):
         nan_pose = [np.nan] * 4
         entity_last_seen = {}
         np_entities = {}
-        sorted_features = sorted(track.features.items(), key=lambda x: x[0])
+        sorted_features = sorted(self.track.features.items(), key=lambda x: x[0])
         for frame_number, features in sorted_features:
             for feature in features.features:
                 if feature.id is None:

@@ -2,7 +2,7 @@ use super::{
     protocol::*, tracking::start_tracking_task, BiotrackerConfig, ChannelRequest,
     CommandLineArguments, RobofishCommander, Service, State,
 };
-use crate::log_error;
+use crate::{biotracker::observer::start_observer_task, log_error};
 use anyhow::{Context, Result};
 use bio_tracker_server::BioTrackerServer;
 use std::sync::Arc;
@@ -114,6 +114,7 @@ impl Core {
 
         let mut decoder_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut tracking_task: Option<tokio::task::JoinHandle<()>> = None;
+        let mut observer_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut encoder_task = None;
         let (decoder_tx, mut decoder_rx) = channel(16);
         let (tracking_tx, mut tracking_rx) = channel(16);
@@ -208,6 +209,7 @@ impl Core {
                                         &image);
                                 }
                             }
+                            start_observer_task(&self.state, &mut observer_task);
                         }
                         Err(e) => {
                             log::warn!("Tracking failed: {}", e);
@@ -329,10 +331,6 @@ impl Core {
     }
 
     async fn finish_recording(&mut self) -> Result<()> {
-        let save_request = TrackSaveRequest {
-            experiment: Some(self.state.experiment.clone()),
-            track: Some(self.state.track.clone()),
-        };
         let recording_config = self
             .state
             .experiment
@@ -341,12 +339,6 @@ impl Core {
             .context("Missing recording config")?;
         let track_path = format!("{}.json", recording_config.base_path);
         log_error!(self.state.save_track(&track_path));
-        self.state
-            .connections
-            .track_recorder()
-            .context("TrackRecorder not connected")?
-            .save(save_request)
-            .await?;
         Ok(())
     }
 }
