@@ -3,12 +3,12 @@ use anyhow::{Context, Result};
 use super::{ComponentConfig, PythonConfig};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::{Child, Command};
+use tokio::process::Command;
 
 pub struct PythonProcess {
     log_task: tokio::task::JoinHandle<Result<()>>,
+    wait_task: tokio::task::JoinHandle<Result<()>>,
     id: String,
-    child: Child,
 }
 
 impl PythonProcess {
@@ -25,6 +25,7 @@ impl PythonProcess {
             .arg("-c")
             .arg(commandline)
             .stdout(Stdio::piped())
+            .kill_on_drop(true)
             .spawn()?;
         let mut stdout_reader =
             BufReader::new(child.stdout.take().context("stdout not available")?).lines();
@@ -35,11 +36,17 @@ impl PythonProcess {
             }
             Ok(())
         });
+        let id = config.id.clone();
+        let wait_task = tokio::spawn(async move {
+            let status = child.wait().await?;
+            log::error!(target: &id, "Python process exited with status {}", status);
+            Ok(())
+        });
 
         Ok(Self {
             log_task,
+            wait_task,
             id: config.id.clone(),
-            child,
         })
     }
 
@@ -54,9 +61,7 @@ impl PythonProcess {
     }
 
     async fn kill(&mut self) -> Result<()> {
-        if let Ok(None) = self.child.try_wait() {
-            self.child.kill().await?;
-        }
+        self.wait_task.abort();
         Ok(())
     }
 }

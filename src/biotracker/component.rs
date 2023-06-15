@@ -23,7 +23,7 @@ impl ComponentConnections {
         let mut port_finder = PortFinder::new(port_range_start);
         for config in configs {
             let port = port_finder.next()?;
-            let address = format!("[::1]:{}", port);
+            let address = format!("127.0.0.1:{}", port);
             self.start_component(config.clone(), address).await?;
             let service = ServiceType::from_str_name(&config.services[0]).unwrap();
             let task =
@@ -151,7 +151,7 @@ pub struct ComponentConnection {
 
 impl ComponentConnection {
     async fn new(service_type: ServiceType, config: &ComponentConfig, port: u16) -> Result<Self> {
-        let address = format!("http://[::1]:{}", port);
+        let address = format!("http://127.0.0.1:{}", port);
         let channel = ComponentConnection::poll_connect(&address).await?;
         let client = match service_type {
             ServiceType::Matcher => Ok(GrpcClient::Matcher(MatcherClient::new(channel))),
