@@ -1,6 +1,6 @@
 use super::{
     protocol::*, tracking::start_tracking_task, BiotrackerConfig, ChannelRequest,
-    CommandLineArguments, RobofishCommander, Service, State,
+    CommandLineArguments, Service, State,
 };
 use crate::{biotracker::observer::start_observer_task, log_error};
 use anyhow::{Context, Result};
@@ -18,7 +18,6 @@ pub struct Core {
     image_rx: Receiver<ChannelRequest<Image, Result<Empty>>>,
     state: State,
     state_rx: Receiver<ChannelRequest<(), Experiment>>,
-    robofish_commander_bridge: RobofishCommander,
 }
 
 impl Core {
@@ -49,7 +48,6 @@ impl Core {
             };
         });
         Ok(Self {
-            robofish_commander_bridge: RobofishCommander::new(args.robofish_port).await?,
             args,
             command_rx,
             image_rx,
@@ -198,7 +196,6 @@ impl Core {
                     match tracking_result {
                         Ok(result) => {
                             let frame_number = result.frame_number;
-                            self.robofish_commander_bridge.send(&self.state, &result).await?;
                             self.state.handle_tracking_result(result);
                             if let Some(image) =  &self.state.experiment.last_image {
                                 if image.frame_number != frame_number {
@@ -215,9 +212,6 @@ impl Core {
                             log::warn!("Tracking failed: {}", e);
                         }
                     }
-                }
-                _ = self.robofish_commander_bridge.accept() => {
-                    log::info!("Robofish commander connected");
                 }
                 _ = self.state.connections.update_connections(),
                     if self.state.connections.has_pending_connections() => {}
