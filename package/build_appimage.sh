@@ -12,6 +12,7 @@ set -e
 mkdir $BUILD_DIR || true
 cargo build --release --target-dir $BUILD_DIR --features pylon
 rm -rf $APPDIR || true
+rm biotracker.AppImage || true
 /opt/linuxdeploy/usr/bin/linuxdeploy \
   -e $BUILD_DIR/release/biotracker4 \
   --appdir $APPDIR \
