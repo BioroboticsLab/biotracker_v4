@@ -22,7 +22,7 @@ class SLEAPTracker(FeatureDetectorBase):
         grayscale = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
         prediction = self.model(np_array)
-        features = Features()
+        features = Features(features=[])
         for peaks, vals, instance_score in zip(prediction['instance_peaks'].numpy()[0],
                                                prediction['instance_peak_vals'].numpy()[0],
                                                prediction['centroid_vals'].numpy()[0]):
@@ -38,11 +38,7 @@ class SLEAPTracker(FeatureDetectorBase):
     async def set_config(
         self, component_configuration: "ComponentConfig"
     ) -> "Empty":
-        await self.load_config(component_configuration.config_json)
-        return Empty()
-
-    async def load_config(self, config_json):
-        config = json.loads(config_json)
+        config = json.loads(component_configuration.config_json)
         model_path = config['model_path']
         config_path = os.path.join(model_path, 'config.json')
         assert(model_path is not None and config_path is not None)
@@ -55,6 +51,7 @@ class SLEAPTracker(FeatureDetectorBase):
                                        metadata['node_names'],
                                        metadata['edge_indices'])
         self.model = tf.saved_model.load(model_path)
+        return Empty()
 
     async def initialize_skeleton(self, center_node, front_node, node_names, edge_indices):
         assert(center_node is not None and front_node is not None)
