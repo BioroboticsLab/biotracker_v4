@@ -22,10 +22,12 @@ async fn tracking_task(
         image: Some(image),
         arena: Some(arena.arena.clone()),
     };
+    let detector_start = std::time::Instant::now();
     let response = detector
         .detect_features(detector_request)
         .await?
         .into_inner();
+    metrics::histogram!("latency.feature_detector", detector_start.elapsed());
     let mut features = response
         .features
         .context("Received DetectorResponse without features")?;
@@ -40,7 +42,9 @@ async fn tracking_task(
         last_features: Some(last_features),
         entity_ids,
     };
+    let matcher_start = std::time::Instant::now();
     features = matcher.match_features(matcher_request).await?.into_inner();
+    metrics::histogram!("latency.matcher", matcher_start.elapsed());
     Ok(TrackingResult {
         frame_number,
         features,
@@ -57,6 +61,7 @@ pub fn start_tracking_task(
     if state.experiment.recording_state == RecordingState::Replay as i32 {
         return;
     }
+    let start = std::time::Instant::now();
     let image = image.clone();
     let detector = state.connections.feature_detector();
     let matcher = state.connections.matcher();
@@ -84,6 +89,8 @@ pub fn start_tracking_task(
             undistortion,
         )
         .await;
+        metrics::histogram!("latency.tracking", start.elapsed());
+        metrics::increment_counter!("count.frame_tracked");
         tracking_tx.send(result).await.unwrap();
     }));
 }

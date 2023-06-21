@@ -8,6 +8,7 @@ edition = "2021"
 # egui
 egui = "0.21.0"
 egui-wgpu = "0.21.0"
+egui_extras = "0.21.0"
 eframe= { version="0.21.3", features=["wgpu"], default-features = false }
 rfd = "0.10"
 
@@ -30,6 +31,8 @@ bytemuck = "1.13.0"
 chrono = "0.4.23"
 log = { version="0.4.17", features=["std"] }
 futures = "0.3.26"
+metrics = "0.21.0"
+metrics-util = "0.15.0"
 
 [build-dependencies]
 tonic-build = "0.8.4"

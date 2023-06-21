@@ -1,4 +1,4 @@
-use biotracker::{logger::Logger, CommandLineArguments, Core};
+use biotracker::{logger::Logger, metrics_recorder::MetricsRecorder, CommandLineArguments, Core};
 use clap::Parser;
 use std::sync::Arc;
 use ui::BioTrackerUI;
@@ -18,6 +18,9 @@ fn main() {
     log::set_logger(logger_static_ref)
         .map(|()| log::set_max_level(log::LevelFilter::Warn))
         .unwrap();
+    // Same for the metrics recorder
+    let metrics_static_ref = Box::leak(Box::new(MetricsRecorder::new()));
+    metrics::set_recorder(metrics_static_ref).unwrap();
 
     let args_copy = args.clone();
 
@@ -62,7 +65,15 @@ fn main() {
         },
         Box::new(|cc| {
             Box::new(
-                BioTrackerUI::new(cc, rt_clone, core_thread, logger_static_ref, args_copy).unwrap(),
+                BioTrackerUI::new(
+                    cc,
+                    rt_clone,
+                    core_thread,
+                    logger_static_ref,
+                    metrics_static_ref,
+                    args_copy,
+                )
+                .unwrap(),
             )
         }),
     )

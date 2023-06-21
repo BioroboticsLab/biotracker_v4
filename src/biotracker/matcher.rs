@@ -93,6 +93,12 @@ impl MatcherService {
             })
             .collect();
         if nan_count > 0 || oob_count > 0 {
+            for _ in 0..nan_count {
+                metrics::increment_counter!("count.NaN_features_removed");
+            }
+            for _ in 0..oob_count {
+                metrics::increment_counter!("count.oob_features_removed");
+            }
             log::warn!(
                 "Frame {} Removed {} features containing NaN values and {} out-of-bound features",
                 frame_number,

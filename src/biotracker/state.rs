@@ -1,10 +1,7 @@
 use super::component::ComponentConnections;
 use super::tracking::TrackingResult;
 use super::undistort::UndistortMap;
-use super::{
-    arena::ArenaImpl, metric::DurationMetric, protocol::*, BiotrackerConfig, VideoDecoder,
-    VideoEncoder,
-};
+use super::{arena::ArenaImpl, protocol::*, BiotrackerConfig, VideoDecoder, VideoEncoder};
 use anyhow::{Context, Result};
 use std::sync::{Arc, Mutex};
 
@@ -17,17 +14,10 @@ pub struct State {
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
     pub switch_request: Option<EntityIdSwitch>,
     pub undistortion: Option<UndistortMap>,
-    pub metrics: Metrics,
     pub arena_impl: ArenaImpl,
     pub connections: ComponentConnections,
     recording_start_frame: u32,
     entity_counter: u32,
-}
-
-#[derive(Default)]
-pub struct Metrics {
-    pub tracking_frame_time: DurationMetric,
-    pub playback_frame_time: DurationMetric,
 }
 
 impl State {
@@ -49,7 +39,6 @@ impl State {
                 playback_state: PlaybackState::Paused as i32,
                 recording_state: RecordingState::Initial as i32,
                 realtime_mode: true,
-                tracking_metrics: Some(TrackingMetrics::default()),
                 components,
                 last_features: Some(Features::default()),
                 undistort_mode: UndistortMode::None as i32,
@@ -62,9 +51,7 @@ impl State {
     }
 
     pub fn handle_image_result(&mut self, image: Image) {
-        let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
         self.experiment.last_image = Some(image.clone());
-        tracking_metrics.playback_frame_time = self.metrics.playback_frame_time.update();
         if self.experiment.recording_state == RecordingState::Replay as i32 {
             if let Some(features) = self.track.features.get(&image.frame_number) {
                 self.experiment.last_features = Some(features.clone());
@@ -79,9 +66,7 @@ impl State {
             skeleton,
         } = result;
         self.experiment.skeleton = Some(skeleton.clone());
-        let tracking_metrics = self.experiment.tracking_metrics.as_mut().unwrap();
-        tracking_metrics.tracking_frame_time = self.metrics.tracking_frame_time.update();
-        tracking_metrics.detected_features = features.features.len() as u32;
+        metrics::counter!("count.detected_features", features.features.len() as u64);
         if let Some(switch_request) = self.switch_request.take() {
             features.switch_ids(&switch_request);
         }

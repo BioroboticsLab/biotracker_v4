@@ -33,8 +33,6 @@ message EntityIDSwitch {
   uint32 id2 = 2;
 }
 
-message Transform {}
-
 message BioTrackerCommand {
     oneof command {
         PlaybackState playback_state = 1;
@@ -57,30 +55,32 @@ message BioTrackerCommand {
     }
 }
 
-message TrackingMetrics {
-    uint32 tracking_dropped_frames = 1;
-    uint32 encoder_dropped_frames = 2;
-    uint32 playback_dropped_frames = 9;
-    uint32 detected_features = 8;
-    float playback_frame_time = 3;
-    float tracking_frame_time = 4;
-}
-
 message Experiment {
+    // Target frames per second
     float target_fps = 3;
+    // Metadata for the current video source
     VideoInfo video_info = 4;
+    // Metadata for the recording
     RecordingConfig recording_config = 5;
+    // Configuration for the tracking arena
     Arena arena = 6;
+    // Current Playback state
     PlaybackState playback_state = 7;
+    // Current Recording state
     RecordingState recording_state = 8;
+    // Current Tracking mode
     bool realtime_mode = 12;
+    // Undistortion configuration
     UndistortMode undistort_mode = 17;
-    optional TrackingMetrics tracking_metrics = 14;
+    // Latest tracking image
     optional Image last_image = 9;
+    // Latest tracked features
     optional Features last_features = 11;
+    // List of expected entity ID's
     repeated uint32 entity_ids = 13;
+    // SkeletonDescriptor used in tracked features
     optional SkeletonDescriptor skeleton = 18;
-    optional Transform rectification = 15;
+    // List of BioTracker components
     repeated ComponentConfig components = 16;
 }
 

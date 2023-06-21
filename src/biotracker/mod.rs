@@ -8,7 +8,7 @@ pub mod encoder;
 pub mod features;
 pub mod logger;
 pub mod matcher;
-pub mod metric;
+pub mod metrics_recorder;
 pub mod observer;
 pub mod port;
 pub mod protocol;

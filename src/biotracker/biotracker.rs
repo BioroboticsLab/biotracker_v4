@@ -5,6 +5,7 @@ use super::{
 use crate::{biotracker::observer::start_observer_task, log_error};
 use anyhow::{Context, Result};
 use bio_tracker_server::BioTrackerServer;
+use metrics::{describe_counter, describe_histogram};
 use std::sync::Arc;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
@@ -81,6 +82,27 @@ impl Core {
         if let Some(realtime) = &self.args.realtime {
             self.state.experiment.realtime_mode = *realtime;
         }
+        // initialize metric descriptions
+        describe_histogram!("latency.tracking", "Tracking");
+        describe_histogram!("latency.observers", "Observer update");
+        describe_histogram!("latency.matcher", "Matching");
+        describe_histogram!("latency.feature_detector", "Feature detection");
+        describe_histogram!("latency.image_acquisition", "Image acquisition");
+        describe_histogram!("latency.video_encoding", "Video encoding");
+        describe_histogram!("latency.playback", "Video playback");
+
+        describe_counter!("count.frame_tracked", "Number of tracked frames");
+        describe_counter!("count.frame_encode", "Number of encoded frames");
+        describe_counter!("count.frame_decode", "Number of acquired frames");
+        describe_counter!("count.frame_dropped", "Number of dropped frames");
+        describe_counter!(
+            "count.NaN_features_removed",
+            "Number of invalid animal features"
+        );
+        describe_counter!(
+            "count.oob_features_removed",
+            "Number of out-of-bounds features"
+        );
         Ok(())
     }
 
@@ -114,6 +136,7 @@ impl Core {
         let mut tracking_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut observer_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut encoder_task = None;
+        let mut last_frame_start = std::time::Instant::now();
         let (decoder_tx, mut decoder_rx) = channel(16);
         let (tracking_tx, mut tracking_rx) = channel(16);
 
@@ -155,16 +178,14 @@ impl Core {
                     if self.state.experiment.playback_state == PlaybackState::Playing as i32 &&
                         (self.state.experiment.realtime_mode || tracking_task.is_none()) {
                         if decoder_task.is_some() {
-                            log::warn!("VideoDecoder too slow, dropping frame");
-                            self.state
-                                .experiment
-                                .tracking_metrics
-                                .as_mut()
-                                .unwrap()
-                                .playback_dropped_frames += 1;
+                            metrics::increment_counter!("count.playback_dropped_frames");
                         } else {
+                            metrics::histogram!("latency.playback", last_frame_start.elapsed());
+                            last_frame_start = std::time::Instant::now();
                             self.start_decoder_task(&mut decoder_task, &decoder_tx);
                         }
+                    } else if self.state.experiment.playback_state == PlaybackState::Paused as i32 {
+                            last_frame_start = std::time::Instant::now();
                     }
                 }
                 Some(image_request) = self.image_rx.recv() => {
@@ -286,6 +307,7 @@ impl Core {
         }
 
         if let Some(config) = &self.state.experiment.recording_config {
+            let start = std::time::Instant::now();
             if config.image_stream_id != image.stream_id {
                 return;
             }
@@ -302,15 +324,18 @@ impl Core {
                     .unwrap()
                     .add_frame(image)
                     .expect("Error while encoding image");
+                metrics::histogram!("latency.video_encoding", start.elapsed());
+                metrics::increment_counter!("count.frame_encode");
             }));
         }
     }
 
     fn start_decoder_task(
-        &self,
+        &mut self,
         decoder_task: &mut Option<tokio::task::JoinHandle<()>>,
         result_tx: &Sender<Result<Image>>,
     ) {
+        let start = std::time::Instant::now();
         let result_tx = result_tx.clone();
         if let Some(decoder) = &self.state.video_decoder {
             let decoder = decoder.clone();
@@ -319,6 +344,8 @@ impl Core {
                 *decoder_task = Some(tokio::task::spawn_blocking(move || {
                     let _ =
                         result_tx.blocking_send(decoder.lock().unwrap().get_image(undistortion));
+                    metrics::histogram!("latency.image_acquisition", start.elapsed());
+                    metrics::increment_counter!("count.frame_decode");
                 }));
             }
         }

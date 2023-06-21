@@ -11,7 +11,9 @@ use super::{
     settings::{file_open_buttons, open_video, settings_window},
 };
 use crate::{
-    biotracker::{logger::Logger, protocol::*, CommandLineArguments},
+    biotracker::{
+        logger::Logger, metrics_recorder::MetricsRecorder, protocol::*, CommandLineArguments,
+    },
     util::framenumber_to_hhmmss,
 };
 use std::{sync::Arc, thread::JoinHandle};
@@ -58,6 +60,7 @@ impl BioTrackerUI {
         rt: Arc<tokio::runtime::Runtime>,
         core_thread: JoinHandle<()>,
         logger: &'static Logger,
+        metrics: &'static MetricsRecorder,
         args: CommandLineArguments,
     ) -> Option<Self> {
         cc.egui_ctx.set_visuals(egui::Visuals::light());
@@ -95,7 +98,7 @@ impl BioTrackerUI {
                 annotator: Annotator::default(),
                 record_button: RecordButton::default(),
                 camera_button: CameraButton::new(),
-                metrics_plot: MetricsPlot::new(),
+                metrics_plot: MetricsPlot::new(metrics),
                 log_view: LogView::new(logger),
             },
             get_state_retry: None,

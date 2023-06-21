@@ -30,6 +30,8 @@ struct PylonCamera<'a> {
     _pylon_raii: std::pin::Pin<Box<pylon_cxx::Pylon>>,
 }
 
+struct FakeDecoder {}
+
 trait VideoSampler {
     fn get_image(&mut self, mat: &mut Mat) -> Result<()>;
     fn set_exposure(&mut self, _exposure: f64) -> Result<()> {
@@ -44,6 +46,8 @@ impl Playback {
     fn open(uri: String, fps: f64) -> Result<(Playback, VideoInfo)> {
         if uri.starts_with("pylon:///") {
             Playback::open_basler(uri, fps)
+        } else if uri.starts_with("fake:///") {
+            Playback::open_fake(uri, fps)
         } else {
             Playback::open_cv(uri)
         }
@@ -56,6 +60,22 @@ impl Playback {
         } else {
             None
         }
+    }
+
+    fn open_fake(video_path: String, fps: f64) -> Result<(Playback, VideoInfo)> {
+        Ok((
+            Playback {
+                frame_number: 0,
+                sampler: Box::new(FakeDecoder {}),
+            },
+            VideoInfo {
+                path: video_path,
+                fps,
+                width: 2048,
+                height: 2048,
+                frame_count: 0,
+            },
+        ))
     }
 
     fn open_cv(video_path: String) -> Result<(Playback, VideoInfo)> {
@@ -202,6 +222,16 @@ impl VideoSampler for VideoCapture {
 
     fn seek(&mut self, target_framenumber: u32) -> Result<()> {
         self.set(cv::videoio::CAP_PROP_POS_FRAMES, target_framenumber as f64)?;
+        Ok(())
+    }
+}
+
+impl VideoSampler for FakeDecoder {
+    fn get_image(&mut self, _: &mut Mat) -> Result<()> {
+        Ok(())
+    }
+
+    fn seek(&mut self, _: u32) -> Result<()> {
         Ok(())
     }
 }
