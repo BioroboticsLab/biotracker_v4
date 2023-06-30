@@ -76,14 +76,14 @@ impl MatcherService {
             .iter_mut()
             .filter(|f| {
                 let mut result = true;
-                if config.ignore_out_of_bounds && f.out_of_bounds {
+                if config.ignore_out_of_bounds && f.out_of_bounds.unwrap_or(false) {
                     oob_count += 1;
                     result = false;
                 }
                 if !config.ignore_nan {
                     return result;
                 }
-                for node in f.nodes.iter() {
+                for node in f.image_nodes.iter() {
                     if node.x.is_nan() || node.y.is_nan() {
                         nan_count += 1;
                         result = false;
@@ -150,11 +150,11 @@ impl MatcherService {
     fn distance(a: &Feature, b: &Feature) -> i64 {
         let mut node_squared_distance_sum = 0;
         let mut node_cnt = 0;
-        for node_idx in 0..a.nodes.len() {
-            let x1 = a.nodes[node_idx].x;
-            let y1 = a.nodes[node_idx].y;
-            let x2 = b.nodes[node_idx].x;
-            let y2 = b.nodes[node_idx].y;
+        for node_idx in 0..a.image_nodes.len() {
+            let x1 = a.image_nodes[node_idx].x;
+            let y1 = a.image_nodes[node_idx].y;
+            let x2 = b.image_nodes[node_idx].x;
+            let y2 = b.image_nodes[node_idx].y;
             if x1.is_nan() || y1.is_nan() || x2.is_nan() || y2.is_nan() {
                 continue;
             }

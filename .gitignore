@@ -12,3 +12,4 @@ AppDir/
 *.AppImage
 saved_model/**
 bt4-sleap
+*.json

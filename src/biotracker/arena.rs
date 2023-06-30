@@ -1,5 +1,5 @@
 use super::{
-    protocol::{Arena, Features, Point, Pose, SkeletonDescriptor},
+    protocol::{Arena, Features, Point, SkeletonDescriptor},
     undistort::UndistortMap,
 };
 use anyhow::Result;
@@ -23,43 +23,26 @@ impl ArenaImpl {
         })
     }
 
-    pub fn features_to_poses(
+    pub fn features_to_world(
         &self,
         features: &mut Features,
         skeleton: &SkeletonDescriptor,
         undistortion: Option<UndistortMap>,
     ) -> Result<()> {
         for feature in features.features.iter_mut() {
-            let front = &feature.nodes[skeleton.front_index as usize];
-            let center = &feature.nodes[skeleton.center_index as usize];
-            let front = px_to_cm(
-                front.x,
-                front.y,
-                &self.rectification_transform,
-                &undistortion,
-            )?;
-            let center = px_to_cm(
-                center.x,
-                center.y,
-                &self.rectification_transform,
-                &undistortion,
-            )?;
-
-            let midline = front - center;
-            let direction = midline / midline.norm() as f32;
-            let mut orientation_rad = direction.x.atan2(direction.y) + std::f32::consts::PI / 2.0;
-            if orientation_rad.is_nan() {
-                // happens if center == front
-                orientation_rad = 0.0;
+            feature.world_nodes = feature.image_nodes.clone();
+            for (i, node) in feature.image_nodes.iter().enumerate() {
+                let (x, y) = (node.x, node.y);
+                let cm_pos = px_to_cm(x, y, &self.rectification_transform, &undistortion)?;
+                let world_node = &mut feature.world_nodes[i];
+                world_node.x = cm_pos.x;
+                world_node.y = cm_pos.y;
+                if i == skeleton.center_index as usize {
+                    let out_of_bounds =
+                        point_polygon_test(&self.tracking_area_contour, cm_pos, false)? < 0.0;
+                    feature.out_of_bounds = Some(out_of_bounds);
+                }
             }
-            let out_of_bounds =
-                point_polygon_test(&self.tracking_area_contour, center, false)? < 0.0;
-            feature.out_of_bounds = out_of_bounds;
-            feature.pose = Some(Pose {
-                orientation_rad,
-                x_cm: center.x,
-                y_cm: center.y,
-            });
         }
         Ok(())
     }

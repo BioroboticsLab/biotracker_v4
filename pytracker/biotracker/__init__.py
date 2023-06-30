@@ -5,6 +5,7 @@ from grpclib.client import Channel
 import asyncio
 import os
 import signal
+import numpy as np
 
 def get_address_and_port():
     import urllib.parse
@@ -26,3 +27,14 @@ def heartbeat():
         except Exception as e:
             os.kill(os.getpid(), signal.SIGKILL)
     asyncio.create_task(poll_core())
+
+def feature_to_world_pose(feature: "Feature", skeleton: "SkeletonDescriptor") -> "Pose":
+    front = feature.world_nodes[skeleton.front_index]
+    center = feature.world_nodes[skeleton.center_index]
+    midline = (front.x - center.x, front.y - center.y)
+    direction = midline / np.linalg.norm(midline)
+    orientation = np.arctan2(direction[0], direction[1]) + np.pi / 2.0
+    if np.isnan(orientation):
+        # happens if center == front
+        orientation = 0.0
+    return Pose(x=center.x, y=center.y, orientation=orientation)

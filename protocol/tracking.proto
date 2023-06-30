@@ -2,23 +2,19 @@ syntax = "proto3";
 
 package biotracker;
 
-message Pose {
-  float x_cm = 1;
-  float y_cm = 2;
-  float orientation_rad = 3;
-}
-
 message Feature {
-  repeated SkeletonNode nodes = 1;
-  Pose pose = 2;
-  float score = 3;
-  bool out_of_bounds = 4;
-  optional uint32 id = 5;
+  // Nodes with coordinates in image space, unit is pixels
+  repeated SkeletonNode image_nodes = 1;
+  // Features with coordinates in arena space, unit is centimeter
+  repeated SkeletonNode world_nodes = 5;
+  float score = 2;
+  optional bool out_of_bounds = 3;
+  optional uint32 id = 4;
 }
 
 message Features {
-  repeated Feature features = 2;
-  uint32 frame_number = 1;
+  repeated Feature features = 1;
+  uint32 frame_number = 3;
 }
 
 message Track {
@@ -44,4 +40,13 @@ message SkeletonDescriptor {
   repeated string node_names = 2;
   uint32 front_index = 3;
   uint32 center_index = 4;
+}
+
+message Pose {
+  // Centroid x-coordinate
+  float x = 1;
+  // Centroid y-coordinate
+  float y = 2;
+  // Animal orientation in radians
+  float orientation = 3;
 }

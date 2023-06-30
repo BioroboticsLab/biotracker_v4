@@ -35,7 +35,7 @@ async fn tracking_task(
         .skeleton
         .context("Received DetectorResponse without skeleton")?;
     features.frame_number = frame_number;
-    arena.features_to_poses(&mut features, &skeleton, undistortion)?;
+    arena.features_to_world(&mut features, &skeleton, undistortion)?;
 
     let matcher_request = MatcherRequest {
         features: Some(features.clone()),

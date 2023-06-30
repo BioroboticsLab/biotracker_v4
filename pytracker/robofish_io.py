@@ -58,8 +58,8 @@ class TrackRecorder(ObserverBase):
             for feature in features.features:
                 if feature.id is None:
                     continue
-                pose = feature.pose
-                pose = [pose.x_cm, pose.y_cm, pose.orientation_rad, math.degrees(pose.orientation_rad)]
+                pose = feature_to_world_pose(feature, self.track.skeleton)
+                pose = [pose.x, pose.y, pose.orientation, math.degrees(pose.orientation)]
                 last_seen = entity_last_seen.get(feature.id, -1)
                 if feature.id not in np_entities:
                     np_entities[feature.id] = []

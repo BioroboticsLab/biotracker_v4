@@ -8,14 +8,6 @@ fn main() -> Result<()> {
             "#[serde(deserialize_with=\"from_map\", serialize_with=\"to_map\")]",
         )
         .field_attribute(
-            ".biotracker.Pose.x_cm",
-            "#[serde(deserialize_with=\"from_f32_or_null\")]",
-        )
-        .field_attribute(
-            ".biotracker.Pose.y_cm",
-            "#[serde(deserialize_with=\"from_f32_or_null\")]",
-        )
-        .field_attribute(
             ".biotracker.SkeletonNode.x",
             "#[serde(deserialize_with=\"from_f32_or_null\")]",
         )

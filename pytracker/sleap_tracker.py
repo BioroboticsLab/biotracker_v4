@@ -31,7 +31,7 @@ class SLEAPTracker(FeatureDetectorBase):
                 scale_x = self.target_width / request.image.width
                 scale_y = self.target_width / request.image.width
                 node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
-                feature.nodes.append(node)
+                feature.image_nodes.append(node)
             features.features.append(feature)
         return DetectorResponse(features=features, skeleton=self.skeleton)
 

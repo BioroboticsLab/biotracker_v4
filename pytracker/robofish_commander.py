@@ -6,8 +6,6 @@ import json
 import asyncio, socket
 from grpclib.server import Server
 
-
-
 class RobofishCommanderServerProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -33,19 +31,17 @@ class RobofishCommanderBridge(ObserverBase):
         return Empty()
 
     async def update(self, experiment: "Experiment") -> "Empty":
-        # let mut msg = format!("frame:{frame_number};polygon:0;fishcount:{fishcount};");
         features = experiment.last_features
         fishcount = len(features.features)
         if features is not None:
             msg = f'frame:{features.frame_number};polygon:0;fishcount:{fishcount};'
             timestamp_ms = features.frame_number / experiment.target_fps * 1000.0
             for feature in features.features:
-                if feature.pose is not None:
-                    orientation_rad = feature.pose.orientation_rad
-                    orientation_deg = orientation_rad * 180.0 / math.pi
-                    x_cm = feature.pose.x_cm + experiment.arena.width_cm / 2.0
-                    y_cm = experiment.arena.height_cm / 2.0 - feature.pose.y_cm
-                    msg += f'{feature.id},{x_cm},{y_cm},{orientation_rad},{orientation_deg},20,20,{timestamp_ms},F&'
+                pose = feature_to_world_pose(feature, experiment.skeleton)
+                orientation_deg = math.degrees(pose.orientation)
+                x = pose.x + experiment.arena.width_cm / 2.0
+                y = experiment.arena.height_cm / 2.0 - pose.y
+                msg += f'{feature.id},{x},{y},{pose.orientation},{orientation_deg},20,20,{timestamp_ms},F&'
             if fishcount > 0:
                 msg = msg[:-1]
             msg += ";end"

@@ -137,7 +137,7 @@ impl AnnotatedVideo {
         let circle_radius = 3.0;
         let text_size = 12.0;
 
-        let nodes = &feature.nodes;
+        let nodes = &feature.image_nodes;
         if let Some(skeleton) = skeleton {
             for edge in &skeleton.edges {
                 let from_idx = edge.source as usize;
@@ -297,7 +297,7 @@ impl AnnotatedVideo {
         if let Some(features) = &ctx.experiment.last_features {
             for feature in &features.features {
                 if self.draw_features {
-                    let color = match feature.out_of_bounds {
+                    let color = match feature.out_of_bounds.unwrap_or(false) {
                         true => egui::Color32::RED,
                         false => egui::Color32::GREEN,
                     };
