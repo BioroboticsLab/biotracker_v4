@@ -3,11 +3,21 @@ use super::{
     polygon::Polygon, texture::Texture,
 };
 use crate::biotracker::{
-    protocol::{Arena, Command, Feature, Image, SkeletonDescriptor},
+    protocol::{Arena, Command, Feature, Features, Image, SkeletonDescriptor},
     DoubleBuffer,
 };
 use cv::prelude::*;
 use egui_wgpu::wgpu;
+use std::collections::{HashMap, VecDeque};
+
+pub struct DrawPath {
+    pub enable: bool,
+    pub path_history_length: usize,
+    pub path_history_step: u32,
+    pub fade: f32,
+    paths: HashMap<u32, VecDeque<egui::Pos2>>,
+    last_frame_number: u32,
+}
 
 pub struct AnnotatedVideo {
     pub draw_features: bool,
@@ -16,6 +26,7 @@ pub struct AnnotatedVideo {
     pub draw_ids: bool,
     pub draw_rectification: bool,
     pub draw_tracking_area: bool,
+    pub draw_paths: DrawPath,
     image_updated: bool,
     render_texture_id: egui::TextureId,
     image_texture_id: egui::TextureId,
@@ -49,6 +60,14 @@ impl AnnotatedVideo {
             tracking_area: Polygon::new(),
             offscreen_renderer,
             image_buffers: DoubleBuffer::new(),
+            draw_paths: DrawPath {
+                enable: true,
+                path_history_length: 100,
+                path_history_step: 1,
+                fade: 0.75,
+                paths: HashMap::new(),
+                last_frame_number: 0,
+            },
         }
     }
 
@@ -118,10 +137,61 @@ impl AnnotatedVideo {
             )
     }
 
+    pub fn update_paths(&mut self, features: &Features, skeleton: &Option<SkeletonDescriptor>) {
+        let frames_elapsed = features
+            .frame_number
+            .abs_diff(self.draw_paths.last_frame_number);
+        let center_index = match skeleton {
+            Some(skeleton) => skeleton.center_index as usize,
+            None => 0,
+        };
+        if self.draw_paths.last_frame_number == 0
+            || frames_elapsed >= self.draw_paths.path_history_step
+        {
+            self.draw_paths.last_frame_number = features.frame_number;
+            for feature in &features.features {
+                if let Some(id) = feature.id {
+                    let path = self
+                        .draw_paths
+                        .paths
+                        .entry(id)
+                        .or_insert_with(|| VecDeque::new());
+                    let center_node = &feature.image_nodes[center_index];
+                    path.push_back(egui::pos2(center_node.x, center_node.y));
+                    if path.len() > self.draw_paths.path_history_length {
+                        path.pop_front();
+                    }
+                }
+            }
+        }
+    }
+
     fn update_scale(&mut self, ui: &mut egui::Ui) {
         let zoom_delta = ui.input(|i| i.zoom_delta());
         if zoom_delta != 1.0 {
             self.scale = 0.1f32.max(self.scale * zoom_delta);
+        }
+    }
+
+    fn paint_paths(&self, ctx: &mut BioTrackerUIContext, painter: &egui::Painter) {
+        let line_width = 6.0;
+        for (id, path) in &self.draw_paths.paths {
+            let color = ctx.color_palette.pick(*id);
+            for i in 1..path.len() {
+                let transparancy = 1.0 - (self.draw_paths.fade).powf(i as f32);
+                let color = egui::Color32::from_rgba_premultiplied(
+                    color[0],
+                    color[1],
+                    color[2],
+                    (transparancy * 255.0) as u8,
+                );
+                let from = &path[i - 1];
+                let to = &path[i];
+                painter.line_segment(
+                    [from.clone(), to.clone()],
+                    egui::Stroke::new(line_width, color),
+                );
+            }
         }
     }
 
@@ -294,6 +364,14 @@ impl AnnotatedVideo {
             uv,
             egui::Color32::WHITE,
         );
+
+        if self.draw_paths.enable {
+            if let Some(features) = &ctx.experiment.last_features {
+                self.update_paths(features, &ctx.experiment.skeleton);
+            }
+            self.paint_paths(ctx, &painter);
+        }
+
         if let Some(features) = &ctx.experiment.last_features {
             for feature in &features.features {
                 if self.draw_features {

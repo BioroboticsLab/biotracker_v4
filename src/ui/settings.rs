@@ -24,6 +24,25 @@ pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUICompo
     ui.label("Draw Tracking Area");
     ui.checkbox(&mut video_view.draw_tracking_area, "");
     ui.end_row();
+    ui.label("Draw Paths");
+    ui.checkbox(&mut video_view.draw_paths.enable, "");
+    ui.end_row();
+    ui.label("Path Step Size");
+    ui.add(egui::DragValue::new(
+        &mut video_view.draw_paths.path_history_step,
+    ));
+    ui.end_row();
+    ui.label("Path History Length");
+    ui.add(egui::DragValue::new(
+        &mut video_view.draw_paths.path_history_length,
+    ));
+    ui.end_row();
+    ui.label("Path Fade Out");
+    ui.add(egui::Slider::new(
+        &mut video_view.draw_paths.fade,
+        0.0..=1.0,
+    ));
+    ui.end_row();
 }
 
 pub fn file_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {

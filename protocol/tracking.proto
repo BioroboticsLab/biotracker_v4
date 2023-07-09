@@ -7,8 +7,11 @@ message Feature {
   repeated SkeletonNode image_nodes = 1;
   // Features with coordinates in arena space, unit is centimeter
   repeated SkeletonNode world_nodes = 5;
+  // Confidence score of the feature
   float score = 2;
+  // Is the feature inside the tracking area?
   optional bool out_of_bounds = 3;
+  // Id of the animal
   optional uint32 id = 4;
 }
 
