@@ -103,6 +103,10 @@ impl Core {
             "count.oob_features_removed",
             "Number of out-of-bounds features"
         );
+        describe_counter!(
+            "count.confidence_features_removed",
+            "Number of animal features not passing confidence threshold"
+        );
         Ok(())
     }
 
@@ -189,7 +193,7 @@ impl Core {
                     }
                 }
                 Some(image_request) = self.image_rx.recv() => {
-                    self.start_encoder_task(&mut encoder_task, &image_request.request);
+                    self.start_encoder_task(&mut encoder_task, &image_request.request).await;
                     image_request.result_tx.send(Ok(Empty {})).unwrap();
                 }
                 Some(image_result) = decoder_rx.recv() => {
@@ -204,7 +208,7 @@ impl Core {
                                     &tracking_tx,
                                     &image);
                             }
-                            self.start_encoder_task(&mut encoder_task, &image);
+                            self.start_encoder_task(&mut encoder_task, &image).await;
                         }
                         Err(e) => {
                             log::error!("Error while decoding image: {}", e);
@@ -301,7 +305,11 @@ impl Core {
         Ok(Empty {})
     }
 
-    fn start_encoder_task(&mut self, encoder_task: &mut Option<JoinHandle<()>>, image: &Image) {
+    async fn start_encoder_task(
+        &mut self,
+        encoder_task: &mut Option<JoinHandle<()>>,
+        image: &Image,
+    ) {
         if self.state.experiment.recording_state != RecordingState::Recording as i32 {
             return;
         }
@@ -318,6 +326,9 @@ impl Core {
                 .clone()
                 .expect("VideoEncoder not running");
             let image = image.clone();
+            if let Some(task) = encoder_task.take() {
+                task.await.expect("Error while encoding image");
+            }
             *encoder_task = Some(tokio::task::spawn_blocking(move || {
                 encoder
                     .lock()

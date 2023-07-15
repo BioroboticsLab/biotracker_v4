@@ -24,7 +24,6 @@ pub use channel::ChannelRequest;
 pub use cli::CommandLineArguments;
 pub use decoder::VideoDecoder;
 pub use encoder::VideoEncoder;
-pub use matcher::MatcherService;
 pub use protocol::*;
 pub use service::Service;
 pub use shared_buffer::DoubleBuffer;

@@ -116,7 +116,6 @@ service FeatureDetector {
 message MatcherRequest {
     repeated uint32 entity_ids = 1;
     Features features = 3;
-    Features last_features = 2;
 }
 
 service Matcher {

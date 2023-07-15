@@ -1,6 +1,6 @@
 use super::observer_client::ObserverClient;
 use super::port::PortFinder;
-use super::{protocol::*, python_process::PythonProcess, ComponentConfig, MatcherService};
+use super::{matcher::MatcherService, protocol::*, python_process::PythonProcess, ComponentConfig};
 use anyhow::Result;
 use matcher_server::MatcherServer;
 use std::sync::Arc;
@@ -118,7 +118,7 @@ impl ComponentConnections {
             match config.id.as_str() {
                 "HungarianMatcher" => {
                     tokio::spawn(async move {
-                        let matcher_service = Arc::new(MatcherService::new());
+                        let matcher_service = Arc::new(MatcherService::default());
                         let matcher_server = MatcherServer::from_arc(matcher_service.clone());
                         match Server::builder()
                             .add_service(matcher_server)

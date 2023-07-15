@@ -37,7 +37,10 @@ impl ArenaImpl {
                 let world_node = &mut feature.world_nodes[i];
                 world_node.x = cm_pos.x;
                 world_node.y = cm_pos.y;
-                if i == skeleton.center_index as usize {
+                // Features containing NaN nodes are technically out of bounds, but we treat them
+                // separately: They may still contain other correct nodes, it is up to the plugins
+                // to decide what to do with them.
+                if i == skeleton.center_index as usize && !cm_pos.x.is_nan() && !cm_pos.y.is_nan() {
                     let out_of_bounds =
                         point_polygon_test(&self.tracking_area_contour, cm_pos, false)? < 0.0;
                     feature.out_of_bounds = Some(out_of_bounds);

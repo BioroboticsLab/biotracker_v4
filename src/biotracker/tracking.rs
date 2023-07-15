@@ -13,7 +13,6 @@ async fn tracking_task(
     mut detector: FeatureDetectorClient<tonic::transport::Channel>,
     mut matcher: MatcherClient<tonic::transport::Channel>,
     arena: ArenaImpl,
-    last_features: Features,
     entity_ids: Vec<u32>,
     undistortion: Option<UndistortMap>,
 ) -> Result<TrackingResult> {
@@ -39,7 +38,6 @@ async fn tracking_task(
 
     let matcher_request = MatcherRequest {
         features: Some(features.clone()),
-        last_features: Some(last_features),
         entity_ids,
     };
     let matcher_start = std::time::Instant::now();
@@ -69,26 +67,12 @@ pub fn start_tracking_task(
         return;
     }
     let (detector, matcher) = (detector.unwrap(), matcher.unwrap());
-    let last_features = state
-        .experiment
-        .last_features
-        .clone()
-        .expect("last_features is None");
     let arena = state.arena_impl.clone();
     let tracking_tx = tracking_tx.clone();
     let entity_ids = state.experiment.entity_ids.clone();
     let undistortion = state.get_undistortion(UndistortMode::Poses);
     *task_handle = Some(tokio::spawn(async move {
-        let result = tracking_task(
-            image,
-            detector,
-            matcher,
-            arena,
-            last_features,
-            entity_ids,
-            undistortion,
-        )
-        .await;
+        let result = tracking_task(image, detector, matcher, arena, entity_ids, undistortion).await;
         metrics::histogram!("latency.tracking", start.elapsed());
         metrics::increment_counter!("count.frame_tracked");
         tracking_tx.send(result).await.unwrap();
