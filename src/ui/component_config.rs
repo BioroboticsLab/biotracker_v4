@@ -20,6 +20,14 @@ impl ConfigJson {
                         self.changed = true;
                     }
                 }
+                Value::Number(ref mut n) => {
+                    if let Some(mut f) = n.as_f64() {
+                        if ui.add(egui::DragValue::new(&mut f)).changed() {
+                            *n = serde_json::Number::from_f64(f).unwrap();
+                            self.changed = true;
+                        }
+                    }
+                }
                 _ => {}
             }
             ui.end_row();
