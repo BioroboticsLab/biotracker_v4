@@ -18,19 +18,22 @@ class SLEAPTracker(FeatureDetectorBase):
         except FileNotFoundError as e:
             raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, repr(e))
         buf = shared_img.as_numpy()
+        # scale image to model input size
         resized = cv2.resize(buf, (self.target_width, self.target_height))
         grayscale = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         np_array = grayscale.reshape((1,self.target_width,self.target_height,1)).astype("uint8")
         prediction = self.model(np_array)
         features = Features(features=[])
+        # convert inference result to skeleton nodes
         for peaks, vals, instance_score in zip(prediction['instance_peaks'].numpy()[0],
                                                prediction['instance_peak_vals'].numpy()[0],
                                                prediction['centroid_vals'].numpy()[0]):
             feature = Feature(score=instance_score)
             for peak, val in zip(peaks, vals):
-                scale_x = self.target_width / request.image.width
-                scale_y = self.target_width / request.image.width
-                node = SkeletonNode(x=peak[0] / scale_x, y=peak[1] / scale_y, score=val)
+                # scale back features to original image size
+                x = peak[0] / (self.target_width / request.image.width)
+                y = peak[1] / (self.target_width / request.image.width)
+                node = SkeletonNode(x=x, y=y, score=val)
                 feature.image_nodes.append(node)
             features.features.append(feature)
         return DetectorResponse(features=features, skeleton=self.skeleton)
@@ -57,10 +60,11 @@ class SLEAPTracker(FeatureDetectorBase):
         assert(center_node is not None and front_node is not None)
         assert(node_names is not None and edge_indices is not None)
         edges = []
+        # convert edge indices to SkeletonEdges
         for from_idx, to_idx in edge_indices:
             edges.append(SkeletonEdge(source=from_idx, target=to_idx))
-        front_node_index = None
-        center_node_index = None
+        # find indices for configured front and center nodes
+        front_node_index, center_node_index = None, None
         for i,name in enumerate(node_names):
             if name == front_node:
                 front_node_index = i
