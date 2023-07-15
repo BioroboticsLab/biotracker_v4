@@ -6,6 +6,7 @@ import asyncio
 import os
 import signal
 import numpy as np
+import sys
 
 def get_address_and_port():
     import urllib.parse
@@ -38,3 +39,7 @@ def feature_to_world_pose(feature: "Feature", skeleton: "SkeletonDescriptor") ->
         # happens if center == front
         orientation = 0.0
     return Pose(x=center.x, y=center.y, orientation=orientation)
+
+def log(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
