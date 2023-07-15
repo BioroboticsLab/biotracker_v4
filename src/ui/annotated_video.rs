@@ -61,7 +61,7 @@ impl AnnotatedVideo {
             offscreen_renderer,
             image_buffers: DoubleBuffer::new(),
             draw_paths: DrawPath {
-                enable: true,
+                enable: false,
                 path_history_length: 100,
                 path_history_step: 1,
                 fade: 0.75,
