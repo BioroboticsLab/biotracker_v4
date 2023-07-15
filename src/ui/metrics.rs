@@ -77,7 +77,7 @@ impl MetricsPlot {
                                     ui.label(name);
                                 });
                                 row.col(|ui| {
-                                    ui.label(format!("{:.2}", latency));
+                                    ui.label(format!("{:.2}", latency * 1000.0));
                                 });
                                 row.col(|ui| {
                                     ui.label(format!("{:.2}", fps));
