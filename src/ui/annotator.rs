@@ -4,17 +4,14 @@ pub struct Annotator {
     stroke: egui::Stroke,
     annotations: Vec<Annotation>,
     annotation_builder: Option<AnnotationBuilder>,
-}
-
-enum ShapeType {
-    Rectangle,
-    RoundedRectangle,
-    Arrow,
+    text_buffer: String,
+    font: egui::FontId,
 }
 
 enum Shape {
     Arrow(Arrow),
     Rectangle(Rectangle),
+    Text(Text),
 }
 
 struct Rectangle {
@@ -28,6 +25,12 @@ struct Arrow {
     dir: egui::Vec2,
 }
 
+struct Text {
+    origin: egui::Pos2,
+    text: String,
+    font: egui::FontId,
+}
+
 struct Annotation {
     shape: Shape,
     stroke: egui::Stroke,
@@ -35,11 +38,11 @@ struct Annotation {
 }
 
 struct AnnotationBuilder {
-    pub ty: ShapeType,
     start_frame: u32,
     drag_start: Option<egui::Pos2>,
     shape: Option<Shape>,
     stroke: egui::Stroke,
+    ignore_first_update: bool,
 }
 
 impl Default for Annotator {
@@ -48,6 +51,11 @@ impl Default for Annotator {
             stroke: egui::Stroke::new(4.0, egui::Color32::BLUE),
             annotations: Vec::new(),
             annotation_builder: None,
+            text_buffer: String::new(),
+            font: egui::FontId {
+                size: 12.0,
+                family: egui::FontFamily::Proportional,
+            },
         }
     }
 }
@@ -66,6 +74,15 @@ impl Shape {
             Shape::Arrow(Arrow { origin, dir }) => {
                 painter.arrow(*origin, *dir, stroke);
             }
+            Shape::Text(Text { origin, text, font }) => {
+                painter.text(
+                    *origin,
+                    egui::Align2::CENTER_CENTER,
+                    &text,
+                    font.clone(),
+                    stroke.color,
+                );
+            }
         }
     }
 }
@@ -77,23 +94,54 @@ impl Annotation {
 }
 
 impl AnnotationBuilder {
-    fn new(start_frame: u32, ty: ShapeType, stroke: egui::Stroke) -> Self {
+    fn new(start_frame: u32, stroke: egui::Stroke) -> Self {
         Self {
             start_frame,
             drag_start: None,
             shape: None,
             stroke,
-            ty,
+            ignore_first_update: true,
         }
     }
 
-    fn rectangle(&mut self, response: &egui::Response, rounding: f32) -> bool {
+    fn rectangle(mut self, rounding: f32) -> Self {
+        self.shape = Some(Shape::Rectangle(Rectangle {
+            min: egui::Pos2::ZERO,
+            max: egui::Pos2::ZERO,
+            rounding,
+        }));
+        self
+    }
+
+    fn arrow(mut self) -> Self {
+        self.shape = Some(Shape::Arrow(Arrow {
+            origin: egui::Pos2::ZERO,
+            dir: egui::Vec2::ZERO,
+        }));
+        self
+    }
+
+    fn text(mut self, text: String, font: egui::FontId) -> Self {
+        self.shape = Some(Shape::Text(Text {
+            origin: egui::Pos2::ZERO,
+            text,
+            font,
+        }));
+        self
+    }
+
+    fn update_rectangle(&mut self, response: &egui::Response) -> bool {
+        let rectangle = match self.shape.as_mut() {
+            Some(Shape::Rectangle(r)) => r,
+            _ => return false,
+        };
         if response.dragged() {
             if self.drag_start.is_none() {
                 self.drag_start = response.interact_pointer_pos();
             }
             if let (Some(min), Some(max)) = (self.drag_start, response.interact_pointer_pos()) {
-                self.shape = Some(Shape::Rectangle(Rectangle { min, max, rounding }));
+                rectangle.min = min;
+                rectangle.max = max;
             }
         }
         if response.drag_released() {
@@ -102,7 +150,11 @@ impl AnnotationBuilder {
         false
     }
 
-    fn arrow(&mut self, response: &egui::Response) -> bool {
+    fn update_arrow(&mut self, response: &egui::Response) -> bool {
+        let arrow = match self.shape.as_mut() {
+            Some(Shape::Arrow(a)) => a,
+            _ => return false,
+        };
         if response.dragged() {
             if self.drag_start.is_none() {
                 self.drag_start = response.interact_pointer_pos();
@@ -110,10 +162,8 @@ impl AnnotationBuilder {
             if let (Some(drag_start), Some(mouse_pos)) =
                 (self.drag_start, response.interact_pointer_pos())
             {
-                self.shape = Some(Shape::Arrow(Arrow {
-                    origin: drag_start,
-                    dir: mouse_pos - drag_start,
-                }));
+                arrow.origin = drag_start;
+                arrow.dir = mouse_pos - drag_start;
             }
         }
         if response.drag_released() {
@@ -122,11 +172,30 @@ impl AnnotationBuilder {
         false
     }
 
+    fn update_text(&mut self, response: &egui::Response) -> bool {
+        let text = match self.shape.as_mut() {
+            Some(Shape::Text(t)) => t,
+            _ => return false,
+        };
+        if let Some(mouse_pos) = response.hover_pos() {
+            text.origin = mouse_pos;
+        }
+        if response.clicked() {
+            return true;
+        }
+        false
+    }
+
     fn update(&mut self, response: &egui::Response, painter: &egui::Painter) -> Option<Annotation> {
-        let finalize = match self.ty {
-            ShapeType::Rectangle => self.rectangle(response, 0.0),
-            ShapeType::RoundedRectangle => self.rectangle(response, std::f32::INFINITY),
-            ShapeType::Arrow => self.arrow(response),
+        if self.ignore_first_update {
+            self.ignore_first_update = false;
+            return None;
+        }
+        let finalize = match self.shape.as_ref() {
+            Some(Shape::Rectangle(_)) => self.update_rectangle(response),
+            Some(Shape::Arrow(_)) => self.update_arrow(response),
+            Some(Shape::Text(_)) => self.update_text(response),
+            None => false,
         };
 
         if let Some(shape) = &self.shape {
@@ -150,31 +219,34 @@ impl Annotator {
             .collapsible(false)
             .open(&mut ctx.annotator_open)
             .show(ui.ctx(), |ui| {
+                egui::widgets::stroke_ui(ui, &mut self.stroke, "Style");
                 ui.horizontal_top(|ui| {
-                    egui::widgets::stroke_ui(ui, &mut self.stroke, "Style");
                     if ui.button("⭕").clicked() {
-                        self.annotation_builder = Some(AnnotationBuilder::new(
-                            ctx.current_frame_number,
-                            ShapeType::RoundedRectangle,
-                            self.stroke,
-                        ));
+                        self.annotation_builder = Some(
+                            AnnotationBuilder::new(ctx.current_frame_number, self.stroke)
+                                .rectangle(std::f32::INFINITY),
+                        );
                     }
                     if ui.button("□").clicked() {
-                        self.annotation_builder = Some(AnnotationBuilder::new(
-                            ctx.current_frame_number,
-                            ShapeType::Rectangle,
-                            self.stroke,
-                        ));
+                        self.annotation_builder = Some(
+                            AnnotationBuilder::new(ctx.current_frame_number, self.stroke)
+                                .rectangle(0.0),
+                        );
                     }
                     if ui.button("↘").clicked() {
-                        self.annotation_builder = Some(AnnotationBuilder::new(
-                            ctx.current_frame_number,
-                            ShapeType::Arrow,
-                            self.stroke,
-                        ));
+                        self.annotation_builder = Some(
+                            AnnotationBuilder::new(ctx.current_frame_number, self.stroke).arrow(),
+                        );
                     }
+                });
+                egui::introspection::font_id_ui(ui, &mut self.font);
+                ui.horizontal_top(|ui| {
+                    ui.text_edit_singleline(&mut self.text_buffer);
                     if ui.button("💬").clicked() {
-                        log::error!("Text annotation is not implemented");
+                        self.annotation_builder = Some(
+                            AnnotationBuilder::new(ctx.current_frame_number, self.stroke)
+                                .text(self.text_buffer.clone(), self.font.clone()),
+                        );
                     }
                 });
             });
