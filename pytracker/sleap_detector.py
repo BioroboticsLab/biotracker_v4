@@ -11,7 +11,7 @@ import sys
 import asyncio
 from grpclib.server import Server
 
-class SLEAPTracker(FeatureDetectorBase):
+class SLEAPDetector(FeatureDetectorBase):
     async def detect_features(self, request: "DetectorRequest") -> "DetectorResponse":
         try:
             shared_img = SharedImage(request.image)
@@ -81,7 +81,7 @@ class SLEAPTracker(FeatureDetectorBase):
 async def main():
     heartbeat()
     addr, port = get_address_and_port()
-    server = Server([SLEAPTracker()])
+    server = Server([SLEAPDetector()])
     await server.start(addr, port)
     await server.wait_closed()
 

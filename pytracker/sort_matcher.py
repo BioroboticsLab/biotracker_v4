@@ -6,7 +6,7 @@ import asyncio
 from grpclib.server import Server
 import cv2
 
-class SortTracker(MatcherBase):
+class SortMatcher(MatcherBase):
     async def match_features(
         self, request: "MatcherRequest"
     ) -> "Features":
@@ -40,7 +40,7 @@ class SortTracker(MatcherBase):
 async def main():
     heartbeat()
     addr, port = get_address_and_port()
-    server = Server([SortTracker()])
+    server = Server([SortMatcher()])
     await server.start(addr, port)
     await server.wait_closed()
 
