@@ -281,4 +281,8 @@ impl VideoDecoder {
         self.playback.frame_number = target_framenumber;
         Ok(())
     }
+
+    pub fn end_of_stream(&self) -> bool {
+        self.info.frame_count > 0 && self.playback.frame_number >= self.info.frame_count
+    }
 }

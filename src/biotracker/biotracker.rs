@@ -348,13 +348,17 @@ impl Core {
     ) {
         let start = std::time::Instant::now();
         let result_tx = result_tx.clone();
+
         if let Some(decoder) = &self.state.video_decoder {
             let decoder = decoder.clone();
             if decoder_task.is_none() {
                 let undistortion = self.state.get_undistortion(UndistortMode::Image);
                 *decoder_task = Some(tokio::task::spawn_blocking(move || {
-                    let _ =
-                        result_tx.blocking_send(decoder.lock().unwrap().get_image(undistortion));
+                    let mut decoder = decoder.lock().unwrap();
+                    if decoder.end_of_stream() {
+                        return;
+                    }
+                    let _ = result_tx.blocking_send(decoder.get_image(undistortion));
                     metrics::histogram!("latency.image_acquisition", start.elapsed());
                     metrics::increment_counter!("count.frame_decode");
                 }));
