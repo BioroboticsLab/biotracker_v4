@@ -27,6 +27,9 @@ pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUICompo
     ui.label("Draw Paths");
     ui.checkbox(&mut video_view.draw_paths.enable, "");
     ui.end_row();
+    ui.label("Feature Scale");
+    ui.add(egui::Slider::new(&mut video_view.feature_scale, 0.0..=2.0));
+    ui.end_row();
     ui.label("Path Step Size");
     ui.add(egui::DragValue::new(
         &mut video_view.draw_paths.path_history_step,

@@ -27,6 +27,7 @@ pub struct AnnotatedVideo {
     pub draw_rectification: bool,
     pub draw_tracking_area: bool,
     pub draw_paths: DrawPath,
+    pub feature_scale: f32,
     image_updated: bool,
     render_texture_id: egui::TextureId,
     image_texture_id: egui::TextureId,
@@ -50,6 +51,7 @@ impl AnnotatedVideo {
             draw_ids: true,
             draw_rectification: true,
             draw_tracking_area: true,
+            feature_scale: 1.0,
             image_updated: false,
             render_texture_id: offscreen_texture_id,
             image_texture_id: egui::TextureId::default(),
@@ -203,8 +205,8 @@ impl AnnotatedVideo {
         skeleton: &Option<SkeletonDescriptor>,
         color: egui::Color32,
     ) {
-        let line_width = 6.0;
-        let circle_radius = 3.0;
+        let line_width = 6.0 * self.feature_scale;
+        let circle_radius = 3.0 * self.feature_scale;
         let text_size = 12.0;
 
         let nodes = &feature.image_nodes;
