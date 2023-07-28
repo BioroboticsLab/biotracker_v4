@@ -22,9 +22,8 @@ pub struct Core {
 }
 
 impl Core {
-    pub async fn new(args: &CommandLineArguments) -> Result<Self> {
+    pub async fn new(args: &CommandLineArguments, config: BiotrackerConfig) -> Result<Self> {
         let args = Arc::new(args.clone());
-        let config = BiotrackerConfig::load(&args.config)?;
         let state = State::new(config);
         let (command_tx, command_rx) = channel(1);
         let (state_tx, state_rx) = channel(1);
@@ -153,6 +152,7 @@ impl Core {
             let image_timer = fps_interval.tick();
 
             tokio::select! {
+                biased;
                 Some(command) = self.command_rx.recv() => {
                     let result = self.handle_command(command.request.clone()).await;
                     match command.request {
@@ -174,9 +174,6 @@ impl Core {
                         _ => {}
                     }
                     command.result_tx.send(result).unwrap();
-                }
-                Some(state_request) = self.state_rx.recv() => {
-                    state_request.result_tx.send(self.state.experiment.clone()).unwrap();
                 }
                 _ = image_timer => {
                     if self.state.experiment.playback_state == PlaybackState::Playing as i32 &&
@@ -240,6 +237,9 @@ impl Core {
                 }
                 _ = self.state.connections.update_connections(),
                     if self.state.connections.has_pending_connections() => {}
+                Some(state_request) = self.state_rx.recv() => {
+                    state_request.result_tx.send(self.state.experiment.clone()).unwrap();
+                }
             }
         }
         Ok(())

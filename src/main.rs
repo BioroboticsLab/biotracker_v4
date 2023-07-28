@@ -1,4 +1,6 @@
-use biotracker::{logger::Logger, metrics_recorder::MetricsRecorder, CommandLineArguments, Core};
+use biotracker::{
+    logger::Logger, metrics_recorder::MetricsRecorder, BiotrackerConfig, CommandLineArguments, Core,
+};
 use clap::Parser;
 use std::sync::Arc;
 use ui::BioTrackerUI;
@@ -10,6 +12,29 @@ mod util;
 fn main() {
     let args = CommandLineArguments::parse();
     cv::core::set_num_threads(args.cv_worker_threads as i32).unwrap();
+
+    let config = match BiotrackerConfig::load(&args.config) {
+        Ok(config) => config,
+        Err(e) => {
+            println!("Failed to load config: {}", e);
+            return;
+        }
+    };
+    match std::path::Path::new(&args.config).canonicalize() {
+        Ok(path) => match path.parent() {
+            Some(parent) => match std::env::set_current_dir(parent) {
+                Ok(_) => {}
+                Err(_) => {
+                    eprintln!(
+                        "Failed to set current directory to config file directory.
+                         This may cause problems with paths configured in plugins."
+                    )
+                }
+            },
+            None => {}
+        },
+        Err(_) => {}
+    }
 
     // We need to initialize the logger at runtime. Instead of calling set_boxed_logger, we
     // manually create a static reference. This way, we can keep it and pass it to the UI.
@@ -35,7 +60,7 @@ fn main() {
         .name("BioTrackerCore".to_string())
         .spawn(move || {
             rt.block_on(async move {
-                match Core::new(&args).await {
+                match Core::new(&args, config).await {
                     Ok(mut core) => match core.run().await {
                         Ok(_) => {}
                         Err(e) => {
