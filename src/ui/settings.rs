@@ -213,46 +213,48 @@ pub fn settings_window(
         .resizable(false)
         .open(&mut open)
         .show(ui.ctx(), |ui| {
-            egui::Grid::new("experiment_setup").show(ui, |ui| {
-                ui.heading("Experiment");
-                ui.separator();
-                ui.end_row();
-                experiment_settings(ui, ctx);
-
-                ui.heading("Arena");
-                ui.separator();
-                ui.end_row();
-                arena_settings(ui, ctx);
-
-                ui.heading("Video Source");
-                ui.separator();
-                ui.end_row();
-                video_settings(ui, ctx);
-
-                ui.heading("Annotations");
-                ui.separator();
-                ui.end_row();
-                annotation_settings(ui, components);
-
-                ui.heading("Recording");
-                ui.separator();
-                ui.end_row();
-                recording_settings(ui, ctx);
-
-                for component in ctx.experiment.components.iter_mut() {
-                    if component.id != "HungarianMatcher" {
-                        continue;
-                    }
-                    ui.heading(&component.id);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                egui::Grid::new("experiment_setup").show(ui, |ui| {
+                    ui.heading("Experiment");
                     ui.separator();
                     ui.end_row();
-                    if ConfigJson::new()
-                        .show(ui, &mut component.config_json)
-                        .changed()
-                    {
-                        ctx.bt.command(Command::UpdateComponent(component.clone()));
+                    experiment_settings(ui, ctx);
+
+                    ui.heading("Arena");
+                    ui.separator();
+                    ui.end_row();
+                    arena_settings(ui, ctx);
+
+                    ui.heading("Video Source");
+                    ui.separator();
+                    ui.end_row();
+                    video_settings(ui, ctx);
+
+                    ui.heading("Annotations");
+                    ui.separator();
+                    ui.end_row();
+                    annotation_settings(ui, components);
+
+                    ui.heading("Recording");
+                    ui.separator();
+                    ui.end_row();
+                    recording_settings(ui, ctx);
+
+                    for component in ctx.experiment.components.iter_mut() {
+                        if component.id != "HungarianMatcher" {
+                            continue;
+                        }
+                        ui.heading(&component.id);
+                        ui.separator();
+                        ui.end_row();
+                        if ConfigJson::new()
+                            .show(ui, &mut component.config_json)
+                            .changed()
+                        {
+                            ctx.bt.command(Command::UpdateComponent(component.clone()));
+                        }
                     }
-                }
+                });
             });
         });
     ctx.experiment_setup_open = open;
