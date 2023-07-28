@@ -102,7 +102,6 @@ impl State {
         let result = Ok(video_info.clone());
         self.experiment.video_info = Some(video_info);
         self.video_decoder = Some(Arc::new(Mutex::new(decoder)));
-        self.experiment.playback_state = PlaybackState::Playing as i32;
         result
     }
 

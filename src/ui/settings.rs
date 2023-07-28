@@ -298,7 +298,10 @@ pub fn file_open_menu() -> Option<String> {
 
 pub fn open_video(ctx: &mut BioTrackerUIContext) {
     if let Some(path) = file_open_menu() {
+        // open video
         ctx.bt.command(Command::OpenVideo(path.to_owned()));
+        // initialy the video is paused, seek to first frame to show it
+        ctx.bt.command(Command::Seek(0));
     }
 }
 

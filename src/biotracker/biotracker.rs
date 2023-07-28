@@ -66,6 +66,7 @@ impl Core {
 
         if let Some(video) = self.args.video.clone() {
             log_error!(self.state.open_video(video, &self.args.force_camera_config));
+            log_error!(self.state.set_playback_state(PlaybackState::Playing as i32));
         }
 
         if let Some(seek) = &self.args.seek {

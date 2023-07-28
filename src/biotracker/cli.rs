@@ -4,7 +4,7 @@ use clap::Parser;
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct CommandLineArguments {
-    /// Open video file on startup
+    /// Open and play video file on startup
     #[arg(short, long)]
     pub video: Option<String>,
     /// Start experiment with <count> entities
