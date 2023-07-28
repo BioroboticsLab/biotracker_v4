@@ -38,12 +38,38 @@ impl Matcher for MatcherService {
             features,
             entity_ids,
         } = request;
-
-        let features = features.expect("features must not be None");
+        let features = match features {
+            Some(f) => f,
+            None => {
+                return Err(Status::invalid_argument(
+                    "Received MatcherRequest without features",
+                ))
+            }
+        };
         let mut state = self.inner.lock().unwrap();
         Ok(Response::new(
             state.hungarian_matching(entity_ids, features),
         ))
+    }
+
+    async fn switch_ids(
+        &self,
+        request: Request<EntityIdSwitch>,
+    ) -> Result<Response<Empty>, Status> {
+        let id_switch_request = request.into_inner();
+        let mut state = self.inner.lock().unwrap();
+        let EntityIdSwitch { id1, id2 } = id_switch_request;
+        let id1_known = state.last_seen.contains_key(&id1);
+        let id2_known = state.last_seen.contains_key(&id2);
+        if id1_known && id2_known {
+            let features1 = state.last_seen.remove(&id1).unwrap();
+            let features2 = state.last_seen.remove(&id2).unwrap();
+            state.last_seen.insert(id1, features2);
+            state.last_seen.insert(id2, features1);
+        } else {
+            eprintln!("Could not process ID switch for entity IDs that were not seen before");
+        }
+        Ok(Response::new(Empty {}))
     }
 
     async fn set_config(

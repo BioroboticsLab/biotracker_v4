@@ -121,6 +121,7 @@ message MatcherRequest {
 service Matcher {
     rpc set_config(ComponentConfig) returns (Empty) {}
     rpc match_features(MatcherRequest) returns (Features);
+    rpc switch_ids(EntityIDSwitch) returns (Empty) {}
 }
 
 service Observer {

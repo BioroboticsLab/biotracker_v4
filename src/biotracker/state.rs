@@ -12,7 +12,6 @@ pub struct State {
     pub track: Track,
     pub video_decoder: Option<Arc<Mutex<VideoDecoder>>>,
     pub video_encoder: Option<Arc<Mutex<VideoEncoder>>>,
-    pub switch_request: Option<EntityIdSwitch>,
     pub undistortion: Option<UndistortMap>,
     pub arena_impl: ArenaImpl,
     pub connections: ComponentConnections,
@@ -67,9 +66,6 @@ impl State {
         } = result;
         self.experiment.skeleton = Some(skeleton.clone());
         metrics::counter!("count.detected_features", features.features.len() as u64);
-        if let Some(switch_request) = self.switch_request.take() {
-            features.switch_ids(&switch_request);
-        }
         // Adjust the track frame numbers to start at 0
         let recording_frame_number = frame_number - self.recording_start_frame;
         features.frame_number = recording_frame_number;
@@ -150,10 +146,7 @@ impl State {
         Ok(())
     }
 
-    pub fn switch_entities(&mut self, request: EntityIdSwitch) -> Result<()> {
-        if self.switch_request.is_some() {
-            return Err(anyhow::anyhow!("Entity switch pending"));
-        }
+    pub async fn switch_entities(&mut self, request: EntityIdSwitch) -> Result<()> {
         if self.experiment.recording_state == RecordingState::Replay as i32 {
             // If we are in replay mode, we immediately apply the id switch for all future features
             let last_features_frame = match self.experiment.last_features {
@@ -168,11 +161,16 @@ impl State {
                         features.switch_ids(&request);
                     }
                 });
-        } else {
-            // If we are in tracking mode, we cannot apply the switch immediately, because there
-            // is a copy of the last features in the tracking task. We save the request to be
-            // applied by the tracking task.
-            self.switch_request = Some(request);
+        }
+        if let Some(features) = self.experiment.last_features.as_mut() {
+            features.switch_ids(&request);
+        }
+        // switch IDs for future frames in the matcher
+        if let Some(matcher) = self.connections.matcher().as_mut() {
+            return match matcher.switch_ids(request).await {
+                Ok(_) => Ok(()),
+                Err(e) => Err(anyhow::anyhow!("Matcher failed to switch ids: {}", e)),
+            };
         }
         Ok(())
     }

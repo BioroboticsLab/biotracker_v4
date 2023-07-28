@@ -285,7 +285,7 @@ impl Core {
                 self.state.remove_entity()?;
             }
             Command::SwitchEntities(switch_request) => {
-                self.state.switch_entities(switch_request)?;
+                self.state.switch_entities(switch_request).await?;
             }
             Command::TargetFps(fps) => {
                 if fps <= 0.0 {
