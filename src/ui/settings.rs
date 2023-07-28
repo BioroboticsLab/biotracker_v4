@@ -136,7 +136,10 @@ pub fn experiment_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     ui.end_row();
     let mut fps = ctx.experiment.target_fps;
     ui.add(egui::Label::new("Target FPS")).changed();
-    if ui.add(egui::DragValue::new(&mut fps)).changed() {
+    if ui
+        .add(egui::DragValue::new(&mut fps).clamp_range(0.1..=1000.0))
+        .changed()
+    {
         ctx.bt.command(Command::TargetFps(fps as f32));
     }
 

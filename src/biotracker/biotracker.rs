@@ -288,6 +288,9 @@ impl Core {
                 self.state.switch_entities(switch_request)?;
             }
             Command::TargetFps(fps) => {
+                if fps <= 0.0 {
+                    return Err(anyhow::anyhow!("FPS must > 0"));
+                }
                 self.state.experiment.target_fps = fps;
             }
             Command::UpdateArena(arena) => {
