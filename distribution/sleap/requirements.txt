@@ -1,0 +1,6 @@
+betterproto[compiler]>=2.0.0b5
+tensorflow>=2.10.0
+grpcio-tools>=1.42.0
+grpcio>=1.42.0
+opencv-python>=4.2
+numpy>=1.19.5

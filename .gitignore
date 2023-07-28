@@ -10,6 +10,5 @@ pytracker/biotracker/biotracker/**
 **.png
 AppDir/
 *.AppImage
-saved_model/**
-bt4-sleap
-*.json
+distribution/sleap/biotracker-venv
+distribution/sleap/**model

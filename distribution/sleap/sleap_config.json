@@ -1,0 +1,164 @@
+{
+  "components": [
+    {
+      "id": "SLEAPTracker",
+      "config_json": {
+        "model_config": {
+          "center_node": "center",
+          "front_node": "head"
+        },
+        "model_path": "model"
+      },
+      "services": [
+        "FEATURE_DETECTOR"
+      ],
+      "python_config": {
+        "venv": "biotracker-venv",
+        "cmd": "../../pytracker/sleap_detector.py"
+      }
+    },
+    {
+      "id": "HungarianMatcher",
+      "config_json": {
+        "confidence_threshold_feature": 0.2,
+        "confidence_threshold_node": 0.2,
+        "ignore_nan": false,
+        "ignore_out_of_bounds": true
+      },
+      "services": [
+        "MATCHER"
+      ],
+      "python_config": null
+    },
+    {
+      "id": "RobofishCommanderBridge",
+      "config_json": {
+        "port": 54444
+      },
+      "services": [
+        "OBSERVER"
+      ],
+      "python_config": {
+        "venv": "biotracker-venv",
+        "cmd": "../../pytracker/robofish_commander.py"
+      }
+    }
+  ],
+  "cameras": [
+    {
+      "id": "acA2040-90um",
+      "exposure": 1000.0,
+      "fisheye": false,
+      "distortion_coefficients": [
+        -0.18315561607912903,
+        -0.012699705641214577,
+        0.0,
+        0.0,
+        0.4426613052702229
+      ],
+      "camera_matrix": [
+        2336.883954757736,
+        0.0,
+        1024.0,
+        0.0,
+        2336.883954757736,
+        1024.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ],
+  "arena": {
+    "width_cm": 100,
+    "height_cm": 100,
+    "rectification_corners": [
+      {
+        "x": 65.0,
+        "y": 240.0
+      },
+      {
+        "x": 1880.0,
+        "y": 228.0
+      },
+      {
+        "x": 1880.0,
+        "y": 1720.0
+      },
+      {
+        "x": 77.0,
+        "y": 1738.0
+      }
+    ],
+    "tracking_area_corners": [
+      {
+        "x": 1694.0181,
+        "y": 1627.8794
+      },
+      {
+        "x": 1827.6617,
+        "y": 1420.4011
+      },
+      {
+        "x": 1848.1401,
+        "y": 889.7679
+      },
+      {
+        "x": 1848.4849,
+        "y": 723.15985
+      },
+      {
+        "x": 1832.7067,
+        "y": 518.12
+      },
+      {
+        "x": 1795.4634,
+        "y": 404.71173
+      },
+      {
+        "x": 1653.7283,
+        "y": 290.4271
+      },
+      {
+        "x": 1418.7981,
+        "y": 263.23056
+      },
+      {
+        "x": 882.13025,
+        "y": 251.35791
+      },
+      {
+        "x": 305.009,
+        "y": 278.6131
+      },
+      {
+        "x": 137.04794,
+        "y": 417.40292
+      },
+      {
+        "x": 95.092636,
+        "y": 624.92004
+      },
+      {
+        "x": 111.27794,
+        "y": 1286.7859
+      },
+      {
+        "x": 163.90416,
+        "y": 1576.345
+      },
+      {
+        "x": 419.4504,
+        "y": 1689.5654
+      },
+      {
+        "x": 781.66113,
+        "y": 1691.265
+      },
+      {
+        "x": 1364.0255,
+        "y": 1691.9873
+      }
+    ]
+  }
+}
