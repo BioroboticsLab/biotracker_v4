@@ -51,7 +51,7 @@ impl State {
 
     pub fn handle_image_result(&mut self, image: Image) {
         self.experiment.last_image = Some(image.clone());
-        if self.experiment.recording_state == RecordingState::Replay as i32 {
+        if !self.experiment.track_file.is_empty() {
             if let Some(features) = self.track.features.get(&image.frame_number) {
                 self.experiment.last_features = Some(features.clone());
             }
@@ -116,11 +116,19 @@ impl State {
     }
 
     pub fn open_track(&mut self, path: String) -> Result<()> {
-        let file = std::fs::File::open(path)?;
+        let file = std::fs::File::open(path.clone())?;
         let reader = std::io::BufReader::new(file);
         let track: Track = serde_json::from_reader(reader)?;
         self.experiment.skeleton = track.skeleton.clone();
-        self.experiment.recording_state = RecordingState::Replay as i32;
+        self.experiment.track_file = path;
+        let entities = track
+            .features
+            .values()
+            .flat_map(|f| f.features.iter())
+            .filter(|f| f.id.is_some())
+            .map(|f| f.id.unwrap())
+            .collect::<std::collections::HashSet<_>>();
+        self.experiment.entity_ids = entities.into_iter().collect();
         self.track = track;
         Ok(())
     }
@@ -147,8 +155,12 @@ impl State {
     }
 
     pub async fn switch_entities(&mut self, request: EntityIdSwitch) -> Result<()> {
-        if self.experiment.recording_state == RecordingState::Replay as i32 {
+        if let Some(features) = self.experiment.last_features.as_mut() {
+            features.switch_ids(&request);
+        }
+        if !self.experiment.track_file.is_empty() {
             // If we are in replay mode, we immediately apply the id switch for all future features
+            // in the track, then return
             let last_features_frame = match self.experiment.last_features {
                 Some(ref features) => features.frame_number,
                 None => 0,
@@ -161,9 +173,7 @@ impl State {
                         features.switch_ids(&request);
                     }
                 });
-        }
-        if let Some(features) = self.experiment.last_features.as_mut() {
-            features.switch_ids(&request);
+            return Ok(());
         }
         // switch IDs for future frames in the matcher
         if let Some(matcher) = self.connections.matcher().as_mut() {

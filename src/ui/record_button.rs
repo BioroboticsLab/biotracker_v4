@@ -1,7 +1,4 @@
-use super::{
-    app::BioTrackerUIContext,
-    settings::{filemenu, foldermenu},
-};
+use super::{app::BioTrackerUIContext, settings::folder_open_menu};
 use crate::biotracker::protocol::*;
 use chrono::{Datelike, Timelike};
 
@@ -16,16 +13,6 @@ impl Default for RecordButton {
 impl RecordButton {
     pub fn show(&mut self, ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
         match RecordingState::from_i32(ctx.experiment.recording_state).unwrap() {
-            RecordingState::Replay => {
-                let recording_icon = egui::RichText::new("⏺").color(egui::Color32::GREEN);
-                if ui.button(recording_icon).clicked() {
-                    if let Some(save_path) = filemenu() {
-                        ctx.bt.command(Command::SaveTrack(save_path));
-                    }
-                    ctx.bt
-                        .command(Command::RecordingState(RecordingState::Initial as i32));
-                }
-            }
             RecordingState::Recording => {
                 let recording_icon = egui::RichText::new("⏺").color(egui::Color32::RED);
                 if ui.button(recording_icon).clicked() {
@@ -46,7 +33,7 @@ impl RecordButton {
         };
         let recording_icon = egui::RichText::new("⏺").color(egui::Color32::GRAY);
         if ui.button(recording_icon).clicked() {
-            if let Some(recording_folder) = foldermenu() {
+            if let Some(recording_folder) = folder_open_menu() {
                 if let Some(base_path) = std::path::Path::new(&recording_folder)
                     .join(timestamp())
                     .to_str()

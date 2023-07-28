@@ -52,9 +52,18 @@ pub fn file_open_buttons(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
     if ui.button("🎬").on_hover_text("Open video").clicked() {
         open_video(ctx);
     }
-    if ui.button("🖭").on_hover_text("Load Track").clicked() {
-        open_track(ctx);
-    }
+    ui.menu_button("🖭", |ui| {
+        if ui.button("Load Track").clicked() {
+            if let Some(path) = file_open_menu() {
+                ctx.bt.command(Command::OpenTrack(path));
+            }
+        }
+        if ui.button("Save Track").clicked() {
+            if let Some(path) = file_save_menu() {
+                ctx.bt.command(Command::SaveTrack(path));
+            }
+        }
+    });
 }
 
 pub fn video_settings(ui: &mut egui::Ui, ctx: &mut BioTrackerUIContext) {
@@ -263,28 +272,32 @@ pub fn settings_window(
     ctx.experiment_setup_open = open;
 }
 
-pub fn foldermenu() -> Option<String> {
+pub fn folder_open_menu() -> Option<String> {
     match rfd::FileDialog::new().pick_folder() {
         Some(pathbuf) => pathbuf.to_str().map(|s| s.to_string()),
         None => None,
     }
 }
 
-pub fn filemenu() -> Option<String> {
+pub fn file_save_menu() -> Option<String> {
+    match rfd::FileDialog::new()
+        .add_filter("json", &[&"json"])
+        .save_file()
+    {
+        Some(pathbuf) => pathbuf.to_str().map(|s| s.to_string()),
+        None => None,
+    }
+}
+
+pub fn file_open_menu() -> Option<String> {
     match rfd::FileDialog::new().pick_file() {
         Some(pathbuf) => pathbuf.to_str().map(|s| s.to_string()),
         None => None,
     }
 }
 
-pub fn open_track(ctx: &mut BioTrackerUIContext) {
-    if let Some(path) = filemenu() {
-        ctx.bt.command(Command::OpenTrack(path));
-    }
-}
-
 pub fn open_video(ctx: &mut BioTrackerUIContext) {
-    if let Some(path) = filemenu() {
+    if let Some(path) = file_open_menu() {
         ctx.bt.command(Command::OpenVideo(path.to_owned()));
     }
 }

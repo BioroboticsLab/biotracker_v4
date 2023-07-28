@@ -56,7 +56,7 @@ pub fn start_tracking_task(
     tracking_tx: &tokio::sync::mpsc::Sender<Result<TrackingResult>>,
     image: &Image,
 ) {
-    if state.experiment.recording_state == RecordingState::Replay as i32 {
+    if !state.experiment.track_file.is_empty() {
         return;
     }
     let start = std::time::Instant::now();

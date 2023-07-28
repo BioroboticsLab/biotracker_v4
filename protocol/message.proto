@@ -67,6 +67,8 @@ message Experiment {
     PlaybackState playback_state = 7;
     // Current Recording state
     RecordingState recording_state = 8;
+    // Currently replaying Tracking file, empty if not loaded
+    string track_file = 10;
     // Current Tracking mode
     bool realtime_mode = 12;
     // Undistortion configuration
