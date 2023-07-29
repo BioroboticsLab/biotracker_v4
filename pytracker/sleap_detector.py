@@ -33,7 +33,7 @@ class SLEAPDetector(FeatureDetectorBase):
             for peak, val in zip(peaks, vals):
                 # scale back features to original image size
                 x = peak[0] / (self.target_width / request.image.width)
-                y = peak[1] / (self.target_width / request.image.width)
+                y = peak[1] / (self.target_height / request.image.height)
                 node = SkeletonNode(x=x, y=y, score=val)
                 feature.image_nodes.append(node)
             features.features.append(feature)
