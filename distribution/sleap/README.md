@@ -9,7 +9,7 @@ of three tracking components:
 
 ## TL;DR
 
-```
+```bash
 # Execute everything from the root of the git repository
 # run setup.sh
 sh distribution/sleap/setup.sh
@@ -27,18 +27,17 @@ The python components require setup of a virtual environment. It can be
 initialized by running [distribution/sleap/setup.sh](setup.sh). The script will
 initialize a virtualenv in `distribution/sleap/biotracker-venv`.
 
-```
+```bash
 # From the root of the git repository
 sh distribution/sleap/setup.sh
 ```
-
 ### SLEAP Model
 
 The SLEAP component requires a model. It is expected to be a folder at
 `distribution/sleap/model`. You can copy, or symlink your model to this
 path:
 
-```
+```bash
 # From the root of the git repository
 # symlink
 ln -s ${PATH_TO_YOUR_MODEL} distribution/sleap/model
@@ -57,7 +56,7 @@ export a trained SLEAP model to this format, use the export script at
 `pytracker/sleap_to_savedmodel.py`. It expects paths to a model and an output
 directory name:
 
-```
+```bash
 # Run this in a virtualenv with SLEAP installed, from the root of the git repository
 # The model is exported to the default model path
 python3 pytracker/sleap_to_savedmodel.py -m ${SLEAP_CENTROID_MODEL} ${SLEAP_INSTANCE_MODEL} -s distribution/sleap/model
@@ -65,7 +64,7 @@ python3 pytracker/sleap_to_savedmodel.py -m ${SLEAP_CENTROID_MODEL} ${SLEAP_INST
 
 ## Execution
 
-```
+```bash
 # From the root of the git repository
 cargo run --release -- --config distribution/sleap/sleap_config.json
 ```

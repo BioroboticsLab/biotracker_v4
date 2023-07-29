@@ -2,7 +2,7 @@
 
 ## TL;DR
 
-```
+```bash
 # Build & run test setup
 cargo run --release -- --config distribution/test.json
 ```
@@ -22,7 +22,7 @@ following the [official guide](https://www.rust-lang.org/tools/install).
 
 OpenCV can be installed using your system package manager.
 
-```
+```bash
 # Ubuntu / Debian
 sudo apt install libopencv-dev
 # Arch
@@ -36,7 +36,7 @@ brew install opencv
 BioTracker v4 is built and executed  with `cargo`. It is recommended to use the
 `--release` flag to optimize the build.
 
-```
+```bash
 cargo run --release
 ```
 
@@ -51,7 +51,7 @@ double-dash (` -- `).
 The test configuration may be used to quickly run the application. It can can
 be executed by calling:
 
-```
+```bash
 cargo run --release -- --config distribution/test.json
 ```
 
@@ -64,7 +64,7 @@ a real tracking pipeline.
 
 The CLI may be used to automate some settings at startup. It is documented behind the `--help` argument:
 
-```
+```bash
 biotracker4 --help
 Distributed framework for animal tracking
 
@@ -95,6 +95,42 @@ Options:
           Print help
   -V, --version
           Print version
+```
+## Troubleshooting
+
+### MacOS: Library not loaded @rpath/libclang.dylib
+
+You need to install llvm with homebrew: 
+
+```bash
+brew install llvm
+```
+
+or, if it is installed already, you may have to add it to your environment manually:
+
+```bash
+# 1. Locate libclang.dylib, then copy the result into a variable.
+#    (e.g. /opt/homebrew/Cellar/llvm/16.0.6/lib/)
+find / -name libclang.dylib 2>/dev/null
+LIBCLANG=$YOUR_FIND_RESULT
+# 2. Set environment variable
+export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$LIBCLANG
+# 3. (optional) To set the environment variable permanently, edit your shell config file, or run
+echo "export DYLD_LIBRARY_PATH=$LIBCLANG:$DYLD_LIBRARY_PATH" >> ~/.zshrc`
+```
+
+#### MacOS: setup.sh fails with symbol not found in flat namespace '_CFRelease'
+
+This happens during setup of the python virtualenv, e.g. while running
+`distribution/sleap/setup.sh`. Uninstall grpcio and grpcio-tools and reinstall
+them with the --no-binary flag. Make sure you have activated the biotracker
+venv: 
+
+```bash
+# From the root of the git repository
+source distribution/sleap/biotracker-venv/bin/activate
+pip install grpcio --no-binary :all: 
+pip install --no-binary :all: grpcio-tools --ignore-installed
 ```
 
 ## LICENSE
