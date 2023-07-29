@@ -7,14 +7,14 @@ pub use feature_detector_client::FeatureDetectorClient;
 pub use matcher_client::MatcherClient;
 
 impl BiotrackerConfig {
-    pub fn load(path: &str) -> Result<Self> {
+    pub fn load(path: &std::path::Path) -> Result<Self> {
         let file = std::fs::File::open(path)?;
         let reader = std::io::BufReader::new(file);
         let config = serde_json::from_reader(reader)?;
         Ok(config)
     }
 
-    pub fn save(&self, path: &str) -> Result<()> {
+    pub fn save(&self, path: &std::path::Path) -> Result<()> {
         let file = std::fs::File::create(path)?;
         let writer = std::io::BufWriter::new(file);
         serde_json::to_writer_pretty(writer, self)?;

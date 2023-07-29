@@ -10,7 +10,13 @@ mod ui;
 mod util;
 
 fn main() {
-    let args = CommandLineArguments::parse();
+    let args = match CommandLineArguments::parse().canonicalize_paths() {
+        Ok(args) => args,
+        Err(e) => {
+            println!("Failed to process command line arguments: {}", e);
+            return;
+        }
+    };
     cv::core::set_num_threads(args.cv_worker_threads as i32).unwrap();
 
     let config = match BiotrackerConfig::load(&args.config) {
@@ -20,21 +26,20 @@ fn main() {
             return;
         }
     };
-    match std::path::Path::new(&args.config).canonicalize() {
-        Ok(path) => match path.parent() {
-            Some(parent) => match std::env::set_current_dir(parent) {
-                Ok(_) => {}
-                Err(_) => {
-                    eprintln!(
-                        "Failed to set current directory to config file directory.
-                         This may cause problems with paths configured in plugins."
-                    )
-                }
-            },
-            None => {}
+
+    match args.config.parent() {
+        Some(parent) => match std::env::set_current_dir(parent) {
+            Ok(_) => {}
+            Err(_) => {
+                eprintln!(
+                    "Failed to set current directory to config file directory.
+                     This may cause problems with paths configured in plugins."
+                );
+                return;
+            }
         },
-        Err(_) => {}
-    }
+        None => {}
+    };
 
     // We need to initialize the logger at runtime. Instead of calling set_boxed_logger, we
     // manually create a static reference. This way, we can keep it and pass it to the UI.

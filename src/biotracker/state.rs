@@ -250,11 +250,13 @@ impl State {
         Err(anyhow::anyhow!("Component not found"))
     }
 
-    pub fn save_config(&mut self, path: &str) -> Result<()> {
+    pub fn save_config(&mut self, path: &std::path::Path) -> Result<()> {
         self.config.arena = Some(self.arena_impl.arena.clone());
         self.config.components = self.experiment.components.clone();
-        self.config.save(path)?;
-        Ok(())
+        match self.config.save(path) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(anyhow::anyhow!("{}: at path '{:?}'", e, path)),
+        }
     }
 
     pub fn get_undistortion(&self, mode: UndistortMode) -> Option<UndistortMap> {
