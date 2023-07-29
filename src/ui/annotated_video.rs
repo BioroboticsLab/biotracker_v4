@@ -4,7 +4,7 @@ use super::{
 };
 use crate::biotracker::{
     protocol::{Arena, Command, Feature, Features, Image, SkeletonDescriptor},
-    DoubleBuffer,
+    DoubleBuffer, VideoInfo,
 };
 use cv::prelude::*;
 use egui_wgpu::wgpu;
@@ -16,6 +16,7 @@ pub struct DrawPath {
     pub path_history_step: u32,
     pub fade: f32,
     paths: HashMap<u32, VecDeque<egui::Pos2>>,
+    video_path: String,
     last_frame_number: u32,
 }
 
@@ -68,6 +69,7 @@ impl AnnotatedVideo {
                 path_history_step: 1,
                 fade: 0.75,
                 paths: HashMap::new(),
+                video_path: String::new(),
                 last_frame_number: 0,
             },
         }
@@ -139,7 +141,20 @@ impl AnnotatedVideo {
             )
     }
 
-    pub fn update_paths(&mut self, features: &Features, skeleton: &Option<SkeletonDescriptor>) {
+    fn update_paths(
+        &mut self,
+        features: &Features,
+        video_info: &Option<VideoInfo>,
+        skeleton: &Option<SkeletonDescriptor>,
+    ) {
+        if let Some(info) = video_info {
+            if info.path != self.draw_paths.video_path {
+                self.draw_paths.paths.clear();
+                self.draw_paths.last_frame_number = 0;
+                self.draw_paths.video_path = info.path.clone();
+            }
+        }
+
         let frames_elapsed = features
             .frame_number
             .abs_diff(self.draw_paths.last_frame_number);
@@ -176,11 +191,11 @@ impl AnnotatedVideo {
     }
 
     fn paint_paths(&self, ctx: &mut BioTrackerUIContext, painter: &egui::Painter) {
-        let line_width = 6.0;
+        let line_width = 6.0 * self.feature_scale;
         for (id, path) in &self.draw_paths.paths {
             let color = ctx.color_palette.pick(*id);
             for i in 1..path.len() {
-                let transparancy = 1.0 - (self.draw_paths.fade).powf(i as f32);
+                let transparancy = 1.0 - (self.draw_paths.fade / i as f32);
                 let color = egui::Color32::from_rgba_premultiplied(
                     color[0],
                     color[1],
@@ -207,7 +222,7 @@ impl AnnotatedVideo {
     ) {
         let line_width = 6.0 * self.feature_scale;
         let circle_radius = 3.0 * self.feature_scale;
-        let text_size = 12.0;
+        let text_size = 12.0 * self.feature_scale;
 
         let nodes = &feature.image_nodes;
         if let Some(skeleton) = skeleton {
@@ -369,7 +384,11 @@ impl AnnotatedVideo {
 
         if self.draw_paths.enable {
             if let Some(features) = &ctx.experiment.last_features {
-                self.update_paths(features, &ctx.experiment.skeleton);
+                self.update_paths(
+                    features,
+                    &ctx.experiment.video_info,
+                    &ctx.experiment.skeleton,
+                );
             }
             self.paint_paths(ctx, &painter);
         }

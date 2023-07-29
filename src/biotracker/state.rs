@@ -101,6 +101,8 @@ impl State {
         }
         let result = Ok(video_info.clone());
         self.experiment.video_info = Some(video_info);
+        self.experiment.last_image = None;
+        self.experiment.last_features = None;
         self.video_decoder = Some(Arc::new(Mutex::new(decoder)));
         result
     }
