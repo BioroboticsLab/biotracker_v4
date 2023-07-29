@@ -23,7 +23,9 @@ class SharedImage:
             self.shm = SharedMemory(size=self.size, create=True)
             img.shm_id = self.shm._name
         else:
-            self.shm = SharedMemory(img.shm_id, size=self.size, create=False)
+            # remove leading slash from shm_id, required for MacOS
+            shm_id = img.shm_id.lstrip('/')
+            self.shm = SharedMemory(shm_id, size=self.size, create=False)
             # Don't track this memory, it gets cleaned up by the BioTracker
             resource_tracker.unregister(self.shm._name, 'shared_memory')
         self.ndarray = np.ndarray((img.height, img.width, 3), dtype=np.uint8, buffer=self.shm.buf)

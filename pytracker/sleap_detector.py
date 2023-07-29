@@ -16,7 +16,8 @@ class SLEAPDetector(FeatureDetectorBase):
         try:
             shared_img = SharedImage(request.image)
         except FileNotFoundError as e:
-            raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, repr(e))
+            msg = f'FileNotFoundError for shared memory segment {request.image.shm_id}'
+            raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, msg)
         buf = shared_img.as_numpy()
         # scale image to model input size
         resized = cv2.resize(buf, (self.target_width, self.target_height))
