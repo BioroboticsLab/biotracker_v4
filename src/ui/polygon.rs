@@ -22,8 +22,12 @@ impl Polygon {
         points: &Vec<Point>,
         stroke: &egui::Stroke,
     ) -> Option<Vec<Point>> {
+        let (width, height) = (response.rect.max.x, response.rect.max.y);
         if !self.drag_active {
-            self.points = points.iter().map(|p| egui::Pos2::new(p.x, p.y)).collect();
+            self.points = points
+                .iter()
+                .map(|p| egui::Pos2::new(p.x * width, p.y * height))
+                .collect();
         }
         let to_screen = egui::emath::RectTransform::from_to(
             egui::Rect::from_min_size(egui::Pos2::ZERO, response.rect.size()),
@@ -37,7 +41,6 @@ impl Polygon {
             .enumerate()
             .map(|(i, point)| {
                 let size = egui::Vec2::splat(2.0 * control_point_radius);
-
                 let point_in_screen = to_screen.transform_pos(*point);
                 let point_rect = egui::Rect::from_center_size(point_in_screen, size);
                 let point_id = id.with(i);
@@ -54,7 +57,6 @@ impl Polygon {
                 if point_response.dragged() {
                     self.drag_active = true;
                 }
-
                 egui::Shape::circle_stroke(point_in_screen, control_point_radius, stroke)
             })
             .collect();
@@ -71,7 +73,10 @@ impl Polygon {
             Some(
                 self.points
                     .iter()
-                    .map(|p| Point { x: p.x, y: p.y })
+                    .map(|p| Point {
+                        x: p.x / width,
+                        y: p.y / height,
+                    })
                     .collect(),
             )
         } else {

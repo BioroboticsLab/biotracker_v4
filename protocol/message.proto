@@ -18,12 +18,15 @@ message Point {
   float y = 2;
 }
 
+// Describes the rectification and tracking area The areas are described as
+// polygons. Point coordinates are in normalized pixel coordinates,
+// in range [0.0, 1.0].
 message Arena {
     uint32 width_cm = 3;
     uint32 height_cm = 4;
-    // corners of rectification area in pixel space, in clockwise order
+    // Four corners of rectification area
     repeated Point rectification_corners = 5;
-    // corners of tracking area area in pixel space, in clockwise order
+    // N corners of tracking area
     repeated Point tracking_area_corners = 6;
 }
 

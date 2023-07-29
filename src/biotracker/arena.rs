@@ -1,6 +1,7 @@
 use super::{
-    protocol::{Arena, Features, Point, SkeletonDescriptor},
+    protocol::{Arena, Features, SkeletonDescriptor},
     undistort::UndistortMap,
+    VideoInfo,
 };
 use anyhow::Result;
 use cv::{core::Point2f, imgproc::point_polygon_test, prelude::*, types::VectorOfPoint2f};
@@ -13,9 +14,15 @@ pub struct ArenaImpl {
 }
 
 impl ArenaImpl {
-    pub fn new(arena: Arena) -> Result<Self> {
-        let rectification_transform = arena.rectification_transform()?;
-        let tracking_area_contour = arena.tracking_area_contour(&rectification_transform)?;
+    pub fn new(arena: Arena, video_info: &Option<VideoInfo>) -> Result<Self> {
+        let (px_width, px_height) = match video_info {
+            Some(video_info) => (video_info.width, video_info.height),
+            None => (1024, 1024),
+        };
+
+        let rectification_transform = arena.rectification_transform(px_width, px_height)?;
+        let tracking_area_contour =
+            arena.tracking_area_contour(&rectification_transform, px_width, px_height)?;
         Ok(Self {
             arena,
             rectification_transform,
@@ -52,8 +59,15 @@ impl ArenaImpl {
 }
 
 impl Arena {
-    pub fn rectification_transform(&self) -> Result<Mat> {
-        let src_corners = to_vector_of_point2f(&self.rectification_corners);
+    pub fn rectification_transform(&self, px_width: u32, px_height: u32) -> Result<Mat> {
+        // Rectification corners are stored in relative coordinates in range [0.0, 1.0]. We
+        // transform these to pixel coordinates here. This is necessary, so that the rectification
+        // / tracking areas are independent of video resolution.
+        let src_corners: VectorOfPoint2f = self
+            .rectification_corners
+            .iter()
+            .map(|p| Point2f::new(p.x * px_width as f32, p.y * px_height as f32))
+            .collect();
         let x = self.width_cm as f32 / 2.0;
         let y = self.height_cm as f32 / 2.0;
         let dst_corners = VectorOfPoint2f::from_iter([
@@ -68,10 +82,22 @@ impl Arena {
         Ok(mat)
     }
 
-    pub fn tracking_area_contour(&self, rectification_transform: &Mat) -> Result<VectorOfPoint2f> {
+    pub fn tracking_area_contour(
+        &self,
+        rectification_transform: &Mat,
+        px_width: u32,
+        px_height: u32,
+    ) -> Result<VectorOfPoint2f> {
         let mut area_contour_cm = VectorOfPoint2f::new();
         for p in &self.tracking_area_corners {
-            let p_cm = px_to_cm(p.x, p.y, rectification_transform, &None)?;
+            // again, corners are stored in relative form in range [0.0, 1.0], so that they are
+            // decoupled from video resolution.
+            let p_cm = px_to_cm(
+                p.x * px_width as f32,
+                p.y * px_height as f32,
+                rectification_transform,
+                &None,
+            )?;
             area_contour_cm.push(p_cm);
         }
         Ok(area_contour_cm)
@@ -114,11 +140,4 @@ fn px_to_cm(
     let y: f64 = *rectified.at(1).unwrap();
     let z: f64 = *rectified.at(2).unwrap();
     Ok(Point2f::new((x / z) as f32, (y / z) as f32))
-}
-
-fn to_vector_of_point2f(points: &[Point]) -> VectorOfPoint2f {
-    points
-        .iter()
-        .map(|p| Point2f::new(p.x as f32, p.y as f32))
-        .collect()
 }

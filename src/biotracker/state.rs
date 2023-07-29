@@ -44,7 +44,7 @@ impl State {
                 ..Default::default()
             },
             config,
-            arena_impl: ArenaImpl::new(arena).unwrap(),
+            arena_impl: ArenaImpl::new(arena, &None).unwrap(),
             ..Default::default()
         }
     }
@@ -104,6 +104,9 @@ impl State {
         self.experiment.last_image = None;
         self.experiment.last_features = None;
         self.video_decoder = Some(Arc::new(Mutex::new(decoder)));
+        if let Some(arena) = self.experiment.arena.clone() {
+            self.update_arena(arena)?;
+        }
         result
     }
 
@@ -235,7 +238,7 @@ impl State {
     }
 
     pub fn update_arena(&mut self, arena: Arena) -> Result<()> {
-        self.arena_impl = ArenaImpl::new(arena.clone())?;
+        self.arena_impl = ArenaImpl::new(arena.clone(), &self.experiment.video_info)?;
         self.experiment.arena = Some(arena);
         Ok(())
     }
