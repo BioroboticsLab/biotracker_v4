@@ -27,6 +27,15 @@ pub fn annotation_settings(ui: &mut egui::Ui, components: &mut BioTrackerUICompo
     ui.label("Draw Paths");
     ui.checkbox(&mut video_view.draw_paths.enable, "");
     ui.end_row();
+    ui.label("Reset Paths");
+    if ui
+        .button("Reset")
+        .on_hover_text("Reset all paths.")
+        .clicked()
+    {
+        video_view.reset_paths();
+    }
+    ui.end_row();
     ui.label("Tracking Visualization Scale");
     ui.add(egui::Slider::new(&mut video_view.feature_scale, 0.0..=2.0));
     ui.end_row();

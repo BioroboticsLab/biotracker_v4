@@ -245,6 +245,10 @@ impl eframe::App for BioTrackerUI {
                         );
                         if response.drag_released() || response.lost_focus() || response.changed() {
                             self.context.bt.command(Command::Seek(*current_frame));
+                            self.components.video_view.reset_paths();
+                            // we update the context a second time here, to avoid loading stale
+                            // pre-seek state in the UI.
+                            self.update_context(frame);
                         }
                         ui.label(framenumber_to_hhmmss(frame_count, video_info.fps));
                     }

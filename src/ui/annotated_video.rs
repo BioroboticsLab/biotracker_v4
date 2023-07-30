@@ -141,6 +141,11 @@ impl AnnotatedVideo {
             )
     }
 
+    pub fn reset_paths(&mut self) {
+        self.draw_paths.paths.clear();
+        self.draw_paths.last_frame_number = 0;
+    }
+
     fn update_paths(
         &mut self,
         features: &Features,
@@ -148,23 +153,25 @@ impl AnnotatedVideo {
         skeleton: &Option<SkeletonDescriptor>,
     ) {
         if let Some(info) = video_info {
+            // Reset paths after a new video is loaded
             if info.path != self.draw_paths.video_path {
-                self.draw_paths.paths.clear();
-                self.draw_paths.last_frame_number = 0;
+                self.reset_paths();
                 self.draw_paths.video_path = info.path.clone();
             }
         }
 
-        let frames_elapsed = features
-            .frame_number
-            .abs_diff(self.draw_paths.last_frame_number);
-        let center_index = match skeleton {
-            Some(skeleton) => skeleton.center_index as usize,
-            None => 0,
-        };
+        let frames_elapsed =
+            features.frame_number as i64 - self.draw_paths.last_frame_number as i64;
+        if frames_elapsed < 0 {
+            self.reset_paths();
+        }
         if self.draw_paths.last_frame_number == 0
-            || frames_elapsed >= self.draw_paths.path_history_step
+            || frames_elapsed >= self.draw_paths.path_history_step as i64
         {
+            let center_index = match skeleton {
+                Some(skeleton) => skeleton.center_index as usize,
+                None => 0,
+            };
             self.draw_paths.last_frame_number = features.frame_number;
             for feature in &features.features {
                 if let Some(id) = feature.id {

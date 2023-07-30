@@ -172,6 +172,7 @@ impl Core {
                                 task.abort();
                             }
                             self.start_decoder_task(&mut decoder_task, &decoder_tx);
+                            self.state.experiment.last_features = None;
                         },
                         Command::Shutdown(_) => {
                             self.finish(&[&decoder_task, &tracking_task, &encoder_task])
