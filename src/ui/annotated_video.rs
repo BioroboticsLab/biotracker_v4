@@ -182,7 +182,7 @@ impl AnnotatedVideo {
                         .or_insert_with(|| VecDeque::new());
                     let center_node = &feature.image_nodes[center_index];
                     path.push_back(egui::pos2(center_node.x, center_node.y));
-                    if path.len() > self.draw_paths.path_history_length {
+                    while path.len() > self.draw_paths.path_history_length {
                         path.pop_front();
                     }
                 }
