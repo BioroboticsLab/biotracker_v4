@@ -67,7 +67,7 @@ impl AnnotatedVideo {
                 enable: false,
                 path_history_length: 100,
                 path_history_step: 1,
-                fade: 0.75,
+                fade: 0.25,
                 paths: HashMap::new(),
                 video_path: String::new(),
                 last_frame_number: 0,
@@ -202,8 +202,10 @@ impl AnnotatedVideo {
         for (id, path) in &self.draw_paths.paths {
             let color = ctx.color_palette.pick(*id);
             for i in 1..path.len() {
-                let transparancy = 1.0 - (self.draw_paths.fade / i as f32);
-                let color = egui::Color32::from_rgba_premultiplied(
+                let age_factor = i as f64 / path.len() as f64;
+                let ease_in = 1.0 - (age_factor * std::f64::consts::PI).cos() / 2.0;
+                let transparancy = ease_in * (1.0 - self.draw_paths.fade) as f64;
+                let color = egui::Color32::from_rgba_unmultiplied(
                     color[0],
                     color[1],
                     color[2],
