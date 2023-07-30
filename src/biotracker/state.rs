@@ -15,7 +15,6 @@ pub struct State {
     pub undistortion: Option<UndistortMap>,
     pub arena_impl: ArenaImpl,
     pub connections: ComponentConnections,
-    recording_start_frame: u32,
     entity_counter: u32,
 }
 
@@ -52,7 +51,18 @@ impl State {
     pub fn handle_image_result(&mut self, image: Image) {
         self.experiment.last_image = Some(image.clone());
         if !self.experiment.track_file.is_empty() {
-            if let Some(features) = self.track.features.get(&image.frame_number) {
+            // If a track is loaded for replaying, search and immediately load tracking result.
+            let frame_count = match &self.experiment.video_info {
+                Some(info) => info.frame_count,
+                None => 0,
+            };
+            let track_offset = if frame_count == self.track.original_frame_count {
+                self.track.original_track_start
+            } else {
+                0
+            };
+            let track_frame_number = image.frame_number - track_offset;
+            if let Some(features) = self.track.features.get(&track_frame_number) {
                 self.experiment.last_features = Some(features.clone());
             }
         }
@@ -67,7 +77,7 @@ impl State {
         self.experiment.skeleton = Some(skeleton.clone());
         metrics::counter!("count.detected_features", features.features.len() as u64);
         // Adjust the track frame numbers to start at 0
-        let recording_frame_number = frame_number - self.recording_start_frame;
+        let recording_frame_number = frame_number - self.track.original_track_start;
         features.frame_number = recording_frame_number;
         self.track
             .features
@@ -190,11 +200,19 @@ impl State {
     }
 
     pub fn start_recording(&mut self) -> Result<()> {
-        self.recording_start_frame = match &self.experiment.last_image {
+        let frame_start = match &self.experiment.last_image {
             Some(image) => image.frame_number,
             None => 0,
         };
-        self.track = Track::default();
+        let frame_count = match &self.experiment.video_info {
+            Some(info) => info.frame_count,
+            None => 0,
+        };
+        self.track = Track {
+            original_frame_count: frame_count,
+            original_track_start: frame_start,
+            ..Default::default()
+        };
         Ok(())
     }
 

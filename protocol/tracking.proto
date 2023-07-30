@@ -22,7 +22,15 @@ message Features {
 
 message Track {
   SkeletonDescriptor skeleton = 1;
-  // map from frame number to features
+  // A track may be recorded and rerecorded multiple times. If a video is
+  // recorded, the track should work with both the original and the recorded
+  // video. We use the video frame count as a simple heuristic to match tracks
+  // to videos: if any stored frame count matches the video frame count, its
+  // offset is applied. Otherwise, the track starts at frame 0.
+  uint32 original_frame_count = 3;
+  uint32 original_track_start = 4;
+  // Map from frame number to features. The frame numbers always start at 0. If
+  // applicable, they must be offset by a FrameOffset during replay.
   map<uint32, Features> features = 2;
 }
 
