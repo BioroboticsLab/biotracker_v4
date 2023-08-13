@@ -17,15 +17,8 @@ async fn tracking_task(
     undistortion: Option<UndistortMap>,
 ) -> Result<TrackingResult> {
     let frame_number = image.frame_number;
-    let detector_request = DetectorRequest {
-        image: Some(image),
-        arena: Some(arena.arena.clone()),
-    };
     let detector_start = std::time::Instant::now();
-    let response = detector
-        .detect_features(detector_request)
-        .await?
-        .into_inner();
+    let response = detector.detect_features(image).await?.into_inner();
     metrics::histogram!("latency.feature_detector", detector_start.elapsed());
     let mut features = response
         .features

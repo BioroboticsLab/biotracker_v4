@@ -12,11 +12,11 @@ import asyncio
 from grpclib.server import Server
 
 class SLEAPDetector(FeatureDetectorBase):
-    async def detect_features(self, request: "DetectorRequest") -> "DetectorResponse":
+    async def detect_features(self, image: "Image") -> "DetectorResponse":
         try:
-            shared_img = SharedImage(request.image)
+            shared_img = SharedImage(image)
         except FileNotFoundError as e:
-            msg = f'FileNotFoundError for shared memory segment {request.image.shm_id}'
+            msg = f'FileNotFoundError for shared memory segment {image.shm_id}'
             raise grpclib.GRPCError(grpclib.const.Status.NOT_FOUND, msg)
         buf = shared_img.as_numpy()
         # scale image to model input size
@@ -32,8 +32,8 @@ class SLEAPDetector(FeatureDetectorBase):
             feature = Feature(score=instance_score)
             for peak, val in zip(peaks, vals):
                 # scale back features to original image size
-                x = peak[0] / (self.target_width / request.image.width)
-                y = peak[1] / (self.target_height / request.image.height)
+                x = peak[0] / (self.target_width / image.width)
+                y = peak[1] / (self.target_height / image.height)
                 node = SkeletonNode(x=x, y=y, score=val)
                 feature.image_nodes.append(node)
             features.features.append(feature)

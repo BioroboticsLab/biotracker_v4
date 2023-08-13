@@ -103,11 +103,6 @@ service BioTracker {
     rpc heartbeat(Empty) returns (Empty) {}
 }
 
-message DetectorRequest {
-    Image image = 1;
-    Arena arena = 2;
-}
-
 message DetectorResponse {
     Features features = 1;
     SkeletonDescriptor skeleton = 2;
@@ -115,7 +110,7 @@ message DetectorResponse {
 
 service FeatureDetector {
     rpc set_config(ComponentConfig) returns (Empty) {}
-    rpc detect_features(DetectorRequest) returns (DetectorResponse) {}
+    rpc detect_features(Image) returns (DetectorResponse) {}
 }
 
 message MatcherRequest {
