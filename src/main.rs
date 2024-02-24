@@ -9,33 +9,21 @@ mod biotracker;
 mod ui;
 mod util;
 
-fn main() {
-    let args = match CommandLineArguments::parse().canonicalize_paths() {
-        Ok(args) => args,
-        Err(e) => {
-            println!("Failed to process command line arguments: {}", e);
-            return;
-        }
-    };
+fn main() -> anyhow::Result<()> {
+    let args = CommandLineArguments::parse().canonicalize_paths()?;
+    let headless = args.headless;
     cv::core::set_num_threads(args.cv_worker_threads as i32).unwrap();
 
-    let config = match BiotrackerConfig::load(&args.config) {
-        Ok(config) => config,
-        Err(e) => {
-            println!("Failed to load config: {}", e);
-            return;
-        }
-    };
+    let config = BiotrackerConfig::load(&args.config)?;
 
     match args.config.parent() {
         Some(parent) => match std::env::set_current_dir(parent) {
             Ok(_) => {}
             Err(_) => {
-                eprintln!(
+                return Err(anyhow::anyhow!(
                     "Failed to set current directory to config file directory.
                      This may cause problems with paths configured in plugins."
-                );
-                return;
+                ));
             }
         },
         None => {}
@@ -78,34 +66,37 @@ fn main() {
                     }
                 }
             })
-        })
-        .unwrap();
+        })?;
 
-    eframe::run_native(
-        "BioTracker",
-        eframe::NativeOptions {
-            drag_and_drop_support: true,
-            initial_window_size: Some([1280.0, 1024.0].into()),
-            renderer: eframe::Renderer::Wgpu,
-            wgpu_options: egui_wgpu::WgpuConfiguration {
-                power_preference: egui_wgpu::wgpu::PowerPreference::HighPerformance,
+    if headless {
+        core_thread.join().unwrap();
+    } else {
+        eframe::run_native(
+            "BioTracker",
+            eframe::NativeOptions {
+                drag_and_drop_support: true,
+                initial_window_size: Some([1280.0, 1024.0].into()),
+                renderer: eframe::Renderer::Wgpu,
+                wgpu_options: egui_wgpu::WgpuConfiguration {
+                    power_preference: egui_wgpu::wgpu::PowerPreference::HighPerformance,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
-            ..Default::default()
-        },
-        Box::new(|cc| {
-            Box::new(
-                BioTrackerUI::new(
-                    cc,
-                    rt_clone,
-                    core_thread,
-                    logger_static_ref,
-                    metrics_static_ref,
-                    args_copy,
+            Box::new(|cc| {
+                Box::new(
+                    BioTrackerUI::new(
+                        cc,
+                        rt_clone,
+                        core_thread,
+                        logger_static_ref,
+                        metrics_static_ref,
+                        args_copy,
+                    )
+                    .unwrap(),
                 )
-                .unwrap(),
-            )
-        }),
-    )
-    .unwrap();
+            }),
+        )?;
+    }
+    Ok(())
 }

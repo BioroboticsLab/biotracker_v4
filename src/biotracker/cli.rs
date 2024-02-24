@@ -35,6 +35,9 @@ pub struct CommandLineArguments {
     /// Start of range of ports which are assigned to components.
     #[arg(long, default_value_t = 28000)]
     pub port_range_start: u16,
+    /// Run biotracker in headless mode, without GUI
+    #[arg(long)]
+    pub headless: bool,
 }
 
 impl CommandLineArguments {
