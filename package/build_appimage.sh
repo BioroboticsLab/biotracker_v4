@@ -1,9 +1,9 @@
 #!/bin/bash
 
 cd "$(dirname "$0")"
-source scl_source enable llvm-toolset-7.0
 export PROTOC=/opt/protoc/bin/protoc
 export PYLON_ROOT=/opt/pylon5
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${PYLON_ROOT}/lib64"
 BUILD_DIR=/tmp/biotracker_build
 APPDIR=$BUILD_DIR/AppDir
 

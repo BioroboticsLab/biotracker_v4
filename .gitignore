@@ -1,7 +1,6 @@
 .idea/
 gen/
 target/
-Cargo.lock
 __pycache__/
 TODO
 pytracker/biotracker/biotracker/**
