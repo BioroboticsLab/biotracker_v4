@@ -61,7 +61,7 @@ impl State {
             } else {
                 0
             };
-            let track_frame_number = image.frame_number - track_offset;
+            let track_frame_number = image.frame_number - track_offset + 1;
             if let Some(features) = self.track.features.get(&track_frame_number) {
                 self.experiment.last_features = Some(features.clone());
             }
