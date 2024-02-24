@@ -65,15 +65,8 @@ impl Core {
             .await?;
 
         if let Some(video) = self.args.video.clone() {
-            match video.into_os_string().into_string() {
-                Ok(video) => {
-                    log_error!(self.state.open_video(video, &self.args.force_camera_config));
-                    log_error!(self.state.set_playback_state(PlaybackState::Playing as i32));
-                }
-                Err(_) => {
-                    log::error!("Invalid video path");
-                }
-            }
+            log_error!(self.state.open_video(video, &self.args.force_camera_config));
+            log_error!(self.state.set_playback_state(PlaybackState::Playing as i32));
         }
 
         if let Some(seek) = &self.args.seek {

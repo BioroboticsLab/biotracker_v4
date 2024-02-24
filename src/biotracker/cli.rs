@@ -7,7 +7,7 @@ use clap::Parser;
 pub struct CommandLineArguments {
     /// Open and play video file on startup
     #[arg(short, long)]
-    pub video: Option<std::path::PathBuf>,
+    pub video: Option<String>,
     /// Start experiment with <count> entities
     #[arg(long)]
     pub entity_count: Option<u64>,
@@ -43,7 +43,7 @@ pub struct CommandLineArguments {
 impl CommandLineArguments {
     pub fn canonicalize_paths(mut self) -> Result<Self> {
         canonicalize_path(&mut self.config)?;
-        for arg in [&mut self.video, &mut self.track].iter_mut() {
+        for arg in [&mut self.track].iter_mut() {
             match arg {
                 Some(path) => canonicalize_path(path)?,
                 None => {}
